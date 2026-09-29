@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "outDir": "./dist/",
+    "module": "nodenext",
+    "target": "esnext",
+    "jsx": "react",
+    "allowJs": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "nodenext",
+    // alwaysStrict, strictBindCallApply, strictFunctionTypes, strictNullChecks,
+    // strictPropertyInitialization, noImplicitAny, noImplicitThis, useUnknownInCatchVariables
+    "strict": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+  }
+}
