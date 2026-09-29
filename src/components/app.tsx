@@ -4,6 +4,14 @@ type AppProps = {};
 
 export default function App({ }: AppProps) {
   return (
-    <div>Template</div>
+    <div>
+      <table>
+        <tr>
+          {
+
+          }
+        </tr>
+      </table>
+    </div>
   );
 }
