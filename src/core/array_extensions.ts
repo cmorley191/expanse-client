@@ -1,4 +1,5 @@
-import { Optional, nullopt, opt } from "./optional"
+import { getRandomInt } from "./misc"
+import { Optional, nullopt, opt, optBind, optValueOr } from "./optional"
 
 export type ArrayEveryTransformResult<U> =
   | { testResult: true, transformed: U }
@@ -6,7 +7,7 @@ export type ArrayEveryTransformResult<U> =
 declare global {
   interface Array<T> {
 
-    aggregate<U>(initialState: U, aggregator: (state: U, element: T) => U): U
+    emptyOrSingleOrThrow(message?: string): Optional<T>
 
     /**
      * Similar to `every()`, but the predicate returns an optional transformed version of each element. 
@@ -17,7 +18,32 @@ declare global {
 
     filterTransform<U>(predicate: (element: T, index: number) => Optional<U>): U[]
 
+    get(index: number): Optional<T>;
+    /**
+     * Keys are used to sort elements into groups, in the order that the keys first appear in the array.
+     */
     groupBy<TKey>(keySelector: (element: T, index: number) => TKey): { key: TKey, group: T[] }[]
+    /**
+     * Like groupBy, but:
+     * - empty groups are included for any keys in `requiredKeys` that do not have corresponding elements in the array, and
+     * - the returned groups are ordered by the order of `requiredKeys`; 
+     *   other groups (with a key *not* in `requiredKeys`) are appended in the order that the keys first appear in the array.
+     */
+    groupByAtLeast<TKey>(keySelector: (element: T, index: number) => TKey, requiredKeys: Set<TKey>): { key: TKey, group: T[] }[]
+    /**
+     * Like groupBy, but:
+     * - empty groups are included for any keys in `requiredKeys` that do not have corresponding elements in the array, and
+     * - returns nullopt if any elements have a key that is not in `requiredKeys`, and
+     * - the returned groups are ordered by the order of `requiredKeys`.
+     */
+    groupByAtMost<TKey>(keySelector: (element: T, index: number) => TKey, requiredKeys: Set<TKey>): Optional<{ key: TKey, group: T[] }[]>
+    /**
+     * Like groupBy, but:
+     * - returns nullopt if any keys in `requiredKeys` do not have a corresponding element in the array, and
+     * - returns nullopt if any elements have a key that is not in `requiredKeys`, and
+     * - the returned groups are ordered by the order of `requiredKeys`.
+     */
+    groupByExactly<TKey>(keySelector: (element: T, index: number) => TKey, requiredKeys: Set<TKey>): Optional<{ key: TKey, group: T[] }[]>
 
     /**
      * Splits the array into arrays of the specified size, grouping adjacent elements.
@@ -33,6 +59,29 @@ declare global {
     padLeft(args: { toLength: number, getPadElement: (i: number) => T }): T[]
     padRight(args: { toLength: number, getPadElement: (i: number, arrayIndex: number) => T }): T[]
 
+    permute(): T[][]
+
+    pop_(index?: Optional<number>): Optional<T>;
+
+    /**
+     * Enumerates the array starting from `start` and looping around until `start` is reached again.
+     * 
+     * Equivalent to arr.skip(start).concat(arr.take(start)).
+     * 
+     * e.g. `[2, 4, 6, 8, 10].rotate(2)` returns `[6, 8, 10, 2, 4]`
+     */
+    rotate(start: number): T[],
+
+    /**
+     * Returns slices of the array at each step of length windowSize.
+     * 
+     * e.g. `[1, 2, 3, 4].slice(2)` returns `[[1, 2], [2, 3], [3, 4]]`
+     */
+    slide(windowSize: number): T[][]
+    slide2(): [T, T][]
+    slide3(): [T, T, T][]
+    slide4(): [T, T, T, T][]
+
     /**
      * Splits the array into two arrays `[trues, falses]` using the predicate.
      * The first array contains elements that predicate returned `true` for,
@@ -45,30 +94,28 @@ declare global {
 
     shallowCopy(): T[]
 
-    /**
-     * Shuffles an array in place, mutating it.
-     * 
-     * @returns a reference to the same array
-     */
-    shuffle(): T[]
+    /** Shuffles in place. Call shallowCopy() first if this is a problem. */
+    shuffled(): T[]
 
     skip(count: number): T[]
     take(count: number): T[]
+    take1(): [Optional<T>]
+    take2(): [Optional<T>, Optional<T>]
+    take3(): [Optional<T>, Optional<T>, Optional<T>]
 
     /**
      * Like zip, but extra elements are dropped if one of the arrays is bigger than the other.
      */
     takeZip<U>(other: U[]): [T, U][]
-    zip<U>(other: U[]): [T, U][] | undefined
+    withMap(index: number, mapper: (value: T, index: number) => T): T[]
+    zip<U>(other: U[]): Optional<[T, U][]>
   }
 }
 
-Array.prototype.aggregate = function <T, U>(this: T[], initialState: U, aggregator: (state: U, element: T) => U): U {
-  let state = initialState;
-  this.forEach(x => {
-    state = aggregator(state, x);
-  });
-  return state;
+Array.prototype.emptyOrSingleOrThrow = function <T>(this: T[], message: string = "too many elements") {
+  const [v0, v1] = this.take2();
+  if (v1.hasValue) throw message;
+  return v0;
 }
 
 Array.prototype.everyTransform = function <T, U>(this: T[], predicate: (element: T, index: number) => Optional<U>) {
@@ -91,24 +138,50 @@ Array.prototype.filterTransform = function <T, U>(this: T[], predicate: (element
   return transformeds;
 }
 
+Array.prototype.get = function <T>(this: T[], index: number): Optional<T> {
+  if (index < 0 || index >= this.length) {
+    return nullopt;
+  }
+
+  // scary nonnull assertion! but removing the `| undefined` caused by index out of bounds is the whole point of this function.
+  return opt(this[index]!);
+};
+
 Array.prototype.groupBy = function <T, TKey>(this: T[], keySelector: (element: T, index: number) => TKey) {
-  const groups: { key: TKey, group: T[] }[] = [];
+  return this.groupByAtLeast(keySelector, new Set<TKey>());
+}
+Array.prototype.groupByAtLeast = function <T, TKey>(this: T[], keySelector: (element: T, index: number) => TKey, requiredKeys: Set<TKey>) {
+  const groups = new Map<TKey, T[]>([...requiredKeys.values()].map(key => [key, []]));
   this.forEach((x, i) => {
     const key = keySelector(x, i);
-    const matchingGroup = groups.filter(g => g.key == key)[0];
+    const matchingGroup = groups.get(key);
     if (matchingGroup === undefined) {
-      groups.push({ key, group: [x] });
+      groups.set(key, [x]);
     } else {
-      matchingGroup.group.push(x);
+      matchingGroup.push(x);
     }
   });
-  return groups;
+  return [...groups.entries()].map(([key, group]) => ({ key, group }));
+}
+Array.prototype.groupByAtMost = function <T, TKey>(this: T[], keySelector: (element: T, index: number) => TKey, requiredKeys: Set<TKey>) {
+  const result = this.groupByAtLeast(keySelector, requiredKeys);
+  if (result.length != requiredKeys.size) return nullopt;
+  else return opt(result);
+}
+Array.prototype.groupByExactly = function <T, TKey>(this: T[], keySelector: (element: T, index: number) => TKey, requiredKeys: Set<TKey>) {
+  return optBind(
+    this.groupByAtMost(keySelector, requiredKeys),
+    result => {
+      if (result.some(g => g.group.length == 0)) return nullopt;
+      else return opt(result);
+    }
+  );
 }
 
 Array.prototype.groupwise = function <T>(this: T[], groupSize: number) {
   const groups: T[][] = [];
   this.forEach((x, i) => {
-    const lastGroup = groups.at(-1);
+    const lastGroup = groups[groups.length - 1];
     if (i % groupSize == 0) {
       groups.push([x]);
     } else if (lastGroup === undefined) {
@@ -143,28 +216,71 @@ Array.prototype.padRight = function <T>(this: T[], args: { toLength: number, get
   );
 }
 
+Array.prototype.permute = function <T>(this: T[]) {
+  const results: T[][] = [];
+
+  function backtrack(path: T[], remaining: T[]) {
+    if (remaining.length === 0) {
+      results.push([...path]);
+      return;
+    }
+
+    remaining.forEach((x, i) => {
+      path.push(x);
+      const nextRemaining = remaining.slice(0, i).concat(remaining.slice(i + 1));
+      backtrack(path, nextRemaining);
+      path.pop();
+    });
+  }
+
+  backtrack([], this);
+  return results;
+}
+
+Array.prototype.pop_ = function <T>(this: T[], index: Optional<number> = nullopt): Optional<T> {
+  const index_ = optValueOr(index, this.length - 1);
+  if (index_ < 0 || index_ >= this.length) {
+    return nullopt;
+  }
+  // scary nonnull assertion! but removing the `| undefined` caused by index out of bounds is the whole point of this function.
+  return opt(this.splice(index_, 1)[0]!);
+}
+
+Array.prototype.rotate = function <T>(this: T[], start: number): T[] {
+  return this.skip(start).concat(this.take(start));
+}
 
 Array.prototype.shallowCopy = function <T>(this: T[]) {
   return [...this];
 }
 
-Array.prototype.shuffle = function <T>(this: T[]) {
-  // https://stackoverflow.com/a/2450976
-  let currentIndex = this.length;
-
-  // While there remain elements to shuffle...
-  while (currentIndex != 0) {
-
-    // Pick a remaining element...
-    let randomIndex = Math.floor(Math.random() * currentIndex);
-    currentIndex--;
-
-    // And swap it with the current element.
-    [this[currentIndex], this[randomIndex]] = [
-      this[randomIndex] as T, this[currentIndex] as T];
+Array.prototype.shuffled = function <T>(this: T[]): T[] {
+  let swapsRemaining = this.length;
+  while (swapsRemaining > 0) {
+    const randomIndex = getRandomInt(swapsRemaining);
+    swapsRemaining--;
+    [this[swapsRemaining], this[randomIndex]] = [
+      this[randomIndex]!, this[swapsRemaining]!];
   }
-
   return this;
+}
+
+Array.prototype.slide = function <T>(this: T[], windowSize: number): T[][] {
+  if (windowSize < 1) return [];
+
+  return Array.from({ length: Math.max(0, this.length - windowSize + 1) }, (_, i) => this.slice(i, i + windowSize));
+}
+Array.prototype.slide2 = function <T>(this: T[]): [T, T][] {
+  // scary nonnull assertion! but removing the `| undefined` caused by index out of bounds is the whole point of this function.
+  return this.slide(2).map(s => [s[0]!, s[1]!]);
+}
+Array.prototype.slide3 = function <T>(this: T[]): [T, T, T][] {
+  // scary nonnull assertion! but removing the `| undefined` caused by index out of bounds is the whole point of this function.
+  return this.slide(3).map(s => [s[0]!, s[1]!, s[2]!]);
+}
+Array.prototype.slide4 = function <T>(this: T[]): [T, T, T, T][] {
+  // scary nonnull assertion! but removing the `| undefined` caused by index out of bounds is the whole point of this function.
+  return this.slide(4).map(s => [s[0]!, s[1]!, s[2]!, s[3]!]);
 }
 
 Array.prototype.splitMap = function <T, U>(this: T[], predicate: (element: T, index: number) => [boolean, U]) {
@@ -190,6 +306,15 @@ Array.prototype.skip = function <T>(this: T[], count: number) {
 Array.prototype.take = function <T>(this: T[], count: number) {
   return this.slice(0, count);
 }
+Array.prototype.take1 = function <T>(this: T[]): [Optional<T>] {
+  return [this.get(0)];
+}
+Array.prototype.take2 = function <T>(this: T[]): [Optional<T>, Optional<T>] {
+  return [this.get(0), this.get(1)];
+}
+Array.prototype.take3 = function <T>(this: T[]): [Optional<T>, Optional<T>, Optional<T>] {
+  return [this.get(0), this.get(1), this.get(2)];
+}
 
 Array.prototype.takeZip = function <T, U>(this: T[], other: U[]) {
   return this.filterTransform((x, i) => {
@@ -200,7 +325,11 @@ Array.prototype.takeZip = function <T, U>(this: T[], other: U[]) {
 }
 Array.prototype.zip = function <T, U>(this: T[], other: U[]) {
   if (this.length !== other.length) {
-    return undefined;
+    return nullopt;
   }
-  return this.takeZip(other);
+  return opt(this.takeZip(other));
+}
+
+Array.prototype.withMap = function <T>(this: T[], index: number, mapper: (value: T, index: number) => T) {
+  return this.with(index, mapper(this.at(index) ?? (() => { throw `out of range ${index}` })(), index));
 }

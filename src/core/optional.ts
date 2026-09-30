@@ -4,7 +4,10 @@ export type Optional<T> =
   | { hasValue: false }
 export type nullopt_t = { hasValue: false }
 export const nullopt: nullopt_t = { hasValue: false };
-export function opt<T>(value: T): { hasValue: true, value: T } { return { hasValue: true, value } }
+export function nullopt_<T>(): Optional<T> { return nullopt; }
+export type opt_t<T> = { hasValue: true, value: T }
+export function opt<T>(value: T): Optional<T> { return { hasValue: true, value } }
+export function opt_<T>(value: T): Optional<T> & opt_t<T> { return { hasValue: true, value } }
 
 export function optMap<T, U>(o: Optional<T>, mapper: (value: T) => U): Optional<U> {
   if (o.hasValue === false) return nullopt;
@@ -34,3 +37,25 @@ export function optFromNullableUndefable<T>(v: T | null | undefined): Optional<T
   if (v === null || v === undefined) return nullopt;
   else return opt(v);
 }
+
+export function throwOnNullopt<T>(o: Optional<T>, err: string): T {
+  if (o.hasValue === false) throw err;
+  return o.value;
+}
+
+
+type nullopt_values<T extends readonly unknown[]> = {
+  [K in keyof T]: nullopt_t
+};
+
+export type SequentialOptionals<
+  Ts extends readonly unknown[],
+  Acc extends unknown[] = []
+> = (
+    Ts extends readonly [infer Head, ...infer Tail]
+    ? (
+      | SequentialOptionals<Tail, [...Acc, opt_t<Head>]>
+      | [...Acc, ...nullopt_values<Ts>]
+    )
+    : Acc
+  );
