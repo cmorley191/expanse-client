@@ -459,7 +459,16 @@ export type GameStateBoard = {
   cardTrack: Card[],
   deck: Card[],
   kept: [EventId[], EventId[]],
+  bonusSectorsRemaining: [number, number, number],
 };
+
+export const bonusSectorBonusPoints: [number, number][] = [
+  [1, 1],
+  [2, 1],
+  [2, 1],
+  [3, 2],
+  [3, 2],
+];
 
 export type GameStateAPPhase = { ap: number, selectedFleetGroup: Optional<{ orbital: OrbitalId, count: number }> }
 

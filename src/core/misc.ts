@@ -201,8 +201,18 @@ export function with2<T>(arr: [T, T], index: 0 | 1, value: T): [T, T] {
   ret[index] = value;
   return ret;
 }
+export function with3<T>(arr: [T, T, T], index: 0 | 1 | 2, value: T): [T, T, T] {
+  const ret: [T, T, T] = [arr[0], arr[1], arr[2]];
+  ret[index] = value;
+  return ret;
+}
 export function withMap2<T>(arr: [T, T], index: 0 | 1, mapper: (value: T, index: 0 | 1) => T): [T, T] {
   const ret: [T, T] = [arr[0], arr[1]];
+  ret[index] = mapper(arr[index], index);
+  return ret;
+}
+export function withMap3<T>(arr: [T, T, T], index: 0 | 1 | 2, mapper: (value: T, index: 0 | 1 | 2) => T): [T, T, T] {
+  const ret: [T, T, T] = [arr[0], arr[1], arr[2]];
   ret[index] = mapper(arr[index], index);
   return ret;
 }

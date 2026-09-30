@@ -1,9 +1,9 @@
 import "../core/array_extensions";
 
 import * as React from "react";
-import { BandId, bands, BaseId, bases, Card, CardType, EventId, events, FLEET_COUNT, GameState, GameStateAPPhase, GameStateEventPhase, NONSCORES_PER_PILE, OrbitalId, orbitals, PILES, PlayerId, players, resources, SCORES_PER_PILE, sectors, TRACK_COUNT, trackCost } from "../game/game_types";
-import { assertType, getRandomInt, map2, withMap2 } from "../core/misc";
-import { nullopt, opt, optValueOr } from "../core/optional";
+import { BandId, bands, BaseId, bases, bonusSectorBonusPoints, Card, CardType, EventId, events, FLEET_COUNT, GameState, GameStateAPPhase, GameStateEventPhase, NONSCORES_PER_PILE, OrbitalId, orbitals, PILES, PlayerId, players, resources, SCORES_PER_PILE, SectorId, sectors, TRACK_COUNT, trackCost } from "../game/game_types";
+import { assertType, getRandomInt, map2, withMap2, withMap3 } from "../core/misc";
+import { nullopt, opt, Optional, optValueOr } from "../core/optional";
 
 
 type AppProps = {};
@@ -63,6 +63,7 @@ export default function App({ }: AppProps) {
         cardTrack: track,
         deck,
         kept: [[], []],
+        bonusSectorsRemaining: [2, 2, 2],
       },
     };
   });
@@ -257,15 +258,17 @@ export default function App({ }: AppProps) {
           {event.factions[1] ? "🌐" : undefined}
           {event.text}
         </div>
-        {event.modelImplemented ? undefined : <div style={{ fontSize: 8 }}>(not implemented in model)</div>}
+        {event.modelImplemented ? undefined : <div style={{ fontSize: 8 }}>(not yet implemented in model)</div>}
       </div>
     </div>
   );
 
   function drawAndSetGameState(newState: GameState) {
     const card = newState.board.deck[0]
-    if (card === undefined || newState.board.deck.slice(1).some(c => c.type === CardType.Score) === false) {
-      setGameState({
+    if (card === undefined) return;
+
+    if (newState.board.deck.slice(1).some(c => c.type === CardType.Score) === false) {
+      scoreAndSetGameState(nullopt, {
         ...newState,
         phase: { phase: "game over" },
       });
@@ -294,6 +297,16 @@ export default function App({ }: AppProps) {
               phase: "ap turn initiative deciding",
             },
           });
+        } else {
+          drawAndSetGameState({
+            ...newState,
+            phase: {
+              ...newState.phase,
+              phase: "start",
+              turn: players[newState.phase.turn].opposite,
+              focus: nullopt,
+            },
+          });
         }
       } else {
         setGameState({
@@ -301,6 +314,83 @@ export default function App({ }: AppProps) {
           phase: {
             ...newState.phase,
             ap: newState.phase.ap - 1,
+          },
+        });
+      }
+    }
+  }
+
+  function scoreAndSetGameState(bonusSector: Optional<SectorId>, newState: GameState) {
+    const points = bases.map(base => {
+      const fleets = newState.board.fleets[base.orbital];
+      const influence = newState.board.influence[base.id];
+      if (fleets === undefined || influence === undefined) throw `${newState}`;
+
+      const orbitalControlBonus = map2(players, p => fleets[p.id] > fleets[p.opposite] && influence[p.id] != 0 ? 1 : 0);
+      const power = map2(orbitalControlBonus, (bonus, p) => influence[p] + bonus);
+      return map2(players, (player): number =>
+        (power[player.id] == 0)
+          ? 0
+          : (power[player.id] > power[players[player.id].opposite])
+            ? 1 + (
+              (bonusSector.hasValue && bands[orbitals[base.orbital]?.band ?? 0].sector == bonusSector.value)
+                ? bonusSectorBonusPoints[6 - gameState.board.bonusSectorsRemaining.reduce((a, b) => a + b)]?.[0] ?? 0
+                : 0
+            )
+            : (
+              (bonusSector.hasValue && bands[orbitals[base.orbital]?.band ?? 0].sector == bonusSector.value)
+                ? bonusSectorBonusPoints[6 - gameState.board.bonusSectorsRemaining.reduce((a, b) => a + b)]?.[1] ?? 0
+                : 0
+            )
+      );
+    }).reduce((a, b) => [a[0] + b[0], a[1] + b[1]]);
+
+    (bonusSector.hasValue ? drawAndSetGameState : setGameState)({
+      ...newState,
+      board: {
+        ...newState.board,
+        cp: map2(newState.board.cp, (cp, p) => cp + points[p]),
+      },
+    });
+  }
+
+  function clickSector(sector: SectorId) {
+    if (
+      gameState.phase.phase === "score turn deciding sector"
+      && gameState.board.bonusSectorsRemaining[sector] > 0
+    ) {
+      if (gameState.board.kept[players[gameState.phase.turn].opposite].length != 0) {
+        setGameState({
+          ...gameState,
+          phase: {
+            ...gameState.phase,
+            phase: "score turn kept event deciding",
+            bonusSector: sector,
+            action: players[gameState.phase.turn].opposite,
+          },
+        });
+      } else if (gameState.board.kept[gameState.phase.turn].length != 0) {
+        setGameState({
+          ...gameState,
+          phase: {
+            ...gameState.phase,
+            phase: "score turn kept event deciding",
+            bonusSector: sector,
+            action: gameState.phase.turn,
+          },
+        });
+      } else {
+        scoreAndSetGameState(opt(sector), {
+          ...gameState,
+          board: {
+            ...gameState.board,
+            bonusSectorsRemaining: withMap3(gameState.board.bonusSectorsRemaining, sector, r => r - 1),
+          },
+          phase: {
+            ...gameState.phase,
+            phase: "start",
+            turn: players[gameState.phase.turn].opposite,
+            focus: nullopt,
           },
         });
       }
@@ -374,6 +464,7 @@ export default function App({ }: AppProps) {
                     key={s.id}
                     style={{ fontSize: 32, border: "thick solid gray" }}
                     colSpan={orbitals.filter(o => bands[o.band]?.sector == s.id).length}
+                    onClick={() => { clickSector(s.id); }}
                   >
                     {s.name}
                   </td>
@@ -762,7 +853,7 @@ export default function App({ }: AppProps) {
               >
                 {
                   card.type === CardType.Score
-                    ? <div style={{ fontSize: 32 }}>Score</div>
+                    ? <div style={{ fontSize: 32, width: 200 }}>Score</div>
                     : eventCardDivs[card.event]
                 }
               </td>
