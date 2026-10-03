@@ -1,4 +1,4 @@
-import { nullopt, nullopt_t, opt, opt_t, Optional } from "../core/optional";
+import { nullopt, opt, Optional } from "../core/optional";
 
 export enum SectorId {
   Inner = 0,
@@ -164,6 +164,7 @@ export type Event = {
   subtitle: Optional<string>,
   text: string,
   ap: 2 | 3 | 4,
+  keepCost: 0 | 1,
   factions: [boolean, boolean],
   modelImplemented: boolean,
 };
@@ -174,26 +175,29 @@ export const events: Event[] = [
     subtitle: opt("Camina Drummer"),
     text: "Perform 1 AP.",
     ap: 3,
+    keepCost: 1,
     factions: [true, false],
     modelImplemented: true,
   },
   {
     id: EventId.Miller,
-    title: "Following the Leads",
+    title: "Unlikely Leads",
     subtitle: opt("Det. Josephus Miller"),
-    text: "Keep this card at no CP cost. Discard to first perform the AP, then the eligible Event on an Action card on your turn.",
+    text: "Keep this card at no CP cost. After using the AP of an action card, discard this to use the event as well, if eligible.",
     ap: 4,
+    keepCost: 0,
     factions: [false, true],
-    modelImplemented: false,
+    modelImplemented: true,
   },
   {
     id: EventId.Cotyar,
     title: "First-rate Spy",
     subtitle: opt("Agt. Cotyar Ghazi"),
-    text: "Keep this card at no CP cost. If you play this as your Event during Scoring, look at the Bonus token and take 2 AP of Actions.",
+    text: "Keep this card at no CP cost. Use to take 2 AP of actions. If you use this during scoring, peek at the bonus sector before your actions.",
     ap: 4,
+    keepCost: 0,
     factions: [false, true],
-    modelImplemented: false,
+    modelImplemented: true,
   },
   {
     id: EventId.MaoKwik,
@@ -201,8 +205,9 @@ export const events: Event[] = [
     subtitle: opt("Mao-Kwikowski Mercantile"),
     text: "Keep this card at no CP cost. Discard to treat the AP number on any Action Card as 4 AP.",
     ap: 3,
+    keepCost: 0,
     factions: [true, true],
-    modelImplemented: false,
+    modelImplemented: true,
   },
   {
     id: EventId.Assassin,
@@ -210,8 +215,9 @@ export const events: Event[] = [
     subtitle: opt("K. Nikil, Black Sky"),
     text: "Both players must discard one Kept card.",
     ap: 2,
+    keepCost: 1,
     factions: [true, false],
-    modelImplemented: false,
+    modelImplemented: true,
   },
   {
     id: EventId.CovertOp,
@@ -219,6 +225,7 @@ export const events: Event[] = [
     subtitle: opt("Operation Polyglottal Donkey"),
     text: "Exchange the position of two influence, one belonging to each player.",
     ap: 3,
+    keepCost: 1,
     factions: [true, false],
     modelImplemented: true,
   },
@@ -228,6 +235,7 @@ export const events: Event[] = [
     subtitle: opt("Bush Naval Shipyards"),
     text: "All players build all fleets. Gain 1 CP if your opponent built a fleet.",
     ap: 4,
+    keepCost: 1,
     factions: [false, true],
     modelImplemented: true,
   },
@@ -237,6 +245,7 @@ export const events: Event[] = [
     subtitle: opt("Antony Dresden, PhD"),
     text: "Place influence on each technology base: Londres Nova, Tycho, and Thoth.",
     ap: 4,
+    keepCost: 1,
     factions: [false, true],
     modelImplemented: true,
   },
@@ -246,6 +255,7 @@ export const events: Event[] = [
     subtitle: opt("Amb. Franklin DeGraff"),
     text: "Place influence on each Earth base.",
     ap: 3,
+    keepCost: 1,
     factions: [true, false],
     modelImplemented: true,
   },
@@ -255,6 +265,7 @@ export const events: Event[] = [
     subtitle: nullopt,
     text: "Place influence in each Mars base.",
     ap: 2,
+    keepCost: 1,
     factions: [true, false],
     modelImplemented: true,
   },
@@ -264,6 +275,7 @@ export const events: Event[] = [
     subtitle: opt("The Voices of Eros"),
     text: "Place 1 influence in 1 Base each of the Inner Planets, Belt, and Outer Planets.",
     ap: 4,
+    keepCost: 1,
     factions: [true, true],
     modelImplemented: true,
   },
@@ -273,6 +285,7 @@ export const events: Event[] = [
     subtitle: nullopt,
     text: "Must remove 1 influence from each Mars base. Place 1 influence on an Earth base.",
     ap: 4,
+    keepCost: 1,
     factions: [false, true],
     modelImplemented: true,
   },
@@ -282,6 +295,7 @@ export const events: Event[] = [
     subtitle: nullopt,
     text: "Place influence on an Earth base. If you have Orbital Control of Earth, you may also remove influence from an Earth base.",
     ap: 3,
+    keepCost: 1,
     factions: [true, false],
     modelImplemented: true,
   },
@@ -291,6 +305,7 @@ export const events: Event[] = [
     subtitle: nullopt,
     text: "Place influence on a Mars base. If you have Orbital Control of Mars, you may also remove influence from a Mars base.",
     ap: 3,
+    keepCost: 1,
     factions: [false, true],
     modelImplemented: true,
   },
@@ -300,6 +315,7 @@ export const events: Event[] = [
     subtitle: opt("USG Sadavir Errinwright"),
     text: "On each Base where a player has 3 or more influence, they must remove 1.",
     ap: 4,
+    keepCost: 1,
     factions: [false, true],
     modelImplemented: true,
   },
@@ -309,6 +325,7 @@ export const events: Event[] = [
     subtitle: opt("Slingshot Racing"),
     text: "Remove 1 influence from any Outer Planets Base.",
     ap: 2,
+    keepCost: 1,
     factions: [true, false],
     modelImplemented: true,
   },
@@ -318,15 +335,17 @@ export const events: Event[] = [
     subtitle: nullopt,
     text: "Remove 1 influence from up to 3 bases, each in a different Band.",
     ap: 4,
+    keepCost: 1,
     factions: [true, true],
     modelImplemented: true,
   },
   {
     id: EventId.JulieMao,
-    title: "Insurgent Forces",
+    title: "Informed Insurgent",
     subtitle: opt("Op. Lionel Polanski"),
     text: "Remove 1 influence on 2 Bases with the same Resource type.",
     ap: 4,
+    keepCost: 1,
     factions: [true, true],
     modelImplemented: true,
   },
@@ -336,6 +355,7 @@ export const events: Event[] = [
     subtitle: opt("Star Helix"),
     text: "Remove up to 2 influence total from Bases where you have influence.",
     ap: 3,
+    keepCost: 1,
     factions: [true, true],
     modelImplemented: true,
   },
@@ -345,6 +365,7 @@ export const events: Event[] = [
     subtitle: nullopt,
     text: "Remove up to 2 influence total on Belt Bases, no more than 1 per Base.",
     ap: 3,
+    keepCost: 1,
     factions: [true, false],
     modelImplemented: true,
   },
@@ -354,8 +375,9 @@ export const events: Event[] = [
     subtitle: opt("The Hybrid"),
     text: "Select a Base. Draw the top card from the deck. Remove influence equal to the AP. If a Score card, remove all influence. Put card back on top of deck.",
     ap: 4,
+    keepCost: 1,
     factions: [true, true],
-    modelImplemented: false,
+    modelImplemented: true,
   },
   {
     id: EventId.Nauvoo,
@@ -363,6 +385,7 @@ export const events: Event[] = [
     subtitle: opt("I.S. Nauvoo"),
     text: "Remove 1 influence or 1 fleet from anywhere.",
     ap: 2,
+    keepCost: 1,
     factions: [true, true],
     modelImplemented: true,
   },
@@ -372,15 +395,17 @@ export const events: Event[] = [
     subtitle: opt("Cpt. Theresa Yao"),
     text: "Remove X of your fleets from an Orbital. Remove X+1 opponent fleets (total) from that Orbital. X may be zero.",
     ap: 3,
+    keepCost: 1,
     factions: [true, false],
     modelImplemented: true,
   },
   {
     id: EventId.BobbieDraper,
-    title: "Marine Strike Team",
+    title: "Boarding Party",
     subtitle: opt("GySgt. Bobbie Draper"),
     text: "Remove one opposing fleet, and place one of your fleets in the same Orbital (either unbuilt, or from another Orbital).",
     ap: 4,
+    keepCost: 1,
     factions: [true, true],
     modelImplemented: true,
   },
@@ -390,6 +415,7 @@ export const events: Event[] = [
     subtitle: nullopt,
     text: "Remove zero or one of each player's fleets from the same Orbital.",
     ap: 3,
+    keepCost: 1,
     factions: [true, false],
     modelImplemented: true,
   },
@@ -399,6 +425,7 @@ export const events: Event[] = [
     subtitle: opt("Cpt. C. Yvgeny"),
     text: "Remove 1 opponent fleet from an Orbital where you have a fleet.",
     ap: 2,
+    keepCost: 1,
     factions: [false, true],
     modelImplemented: true,
   },
@@ -408,6 +435,7 @@ export const events: Event[] = [
     subtitle: nullopt,
     text: "Move a fleet up to 1 band, then remove it to remove up to 2 opposing fleets in the same Orbital.",
     ap: 3,
+    keepCost: 1,
     factions: [false, true],
     modelImplemented: true,
   },
@@ -417,8 +445,9 @@ export const events: Event[] = [
     subtitle: nullopt,
     text: "Move up to two fleet groups up to two Bands each.",
     ap: 3,
+    keepCost: 1,
     factions: [true, true],
-    modelImplemented: false,
+    modelImplemented: true,
   },
   {
     id: EventId.Razorback,
@@ -426,6 +455,7 @@ export const events: Event[] = [
     subtitle: opt("Razorback"),
     text: "Move 1 fleet to any Orbital.",
     ap: 2,
+    keepCost: 1,
     factions: [false, true],
     modelImplemented: true,
   },
@@ -435,8 +465,9 @@ export const events: Event[] = [
     subtitle: opt("Adm. Michael Souther"),
     text: "You may move each of your fleets up to one band.",
     ap: 4,
+    keepCost: 1,
     factions: [true, true],
-    modelImplemented: false,
+    modelImplemented: true,
   },
 ];
 
@@ -472,14 +503,21 @@ export const bonusSectorBonusPoints: [number, number][] = [
 
 export type GameStateAPPhase = { ap: number, selectedFleetGroup: Optional<{ orbital: OrbitalId, count: number }> }
 
+export type EventIdKeepOnly =
+  | EventId.Miller
+  | EventId.MaoKwik;
+export type EventIdDeterministic =
+  | EventId.BushNaval
+  | EventId.AntonyDresden
+  | EventId.FranklinDeGraff
+  | EventId.Terraforming
+  | EventId.SadavirErrinwright;
 export type GameStateEventPhase =
   | ({ focus: EventId.Drummer } & GameStateAPPhase)
-  | { focus: EventId.Miller, target: nullopt_t }
-  | { focus: EventId.Miller, target: opt_t<({ phase: "deciding mao-kwik", focus: EventId })> }
-  | ({ focus: EventId.Miller, target: opt_t<({ phase: "ap", focus: EventId } & GameStateAPPhase)> })
-  | ({ focus: EventId.Miller, target: opt_t<({ phase: "event" } & GameStateEventPhase)> })
+  // miller takes place during initiative
   | ({ focus: EventId.Cotyar } & GameStateAPPhase)
-  | { focus: EventId.Assassin, action: PlayerId }
+  // mao-kwik takes place before ap
+  | { focus: EventId.Assassin, assassinAction: PlayerId }
   | { focus: EventId.CovertOp, selectedInfluence: Optional<{ base: BaseId, player: PlayerId }> }
   // bush naval yards is deterministic
   // antony dresden is deterministic
@@ -501,22 +539,29 @@ export type GameStateEventPhase =
   | { focus: EventId.BobbieDraper, removedOrbital: Optional<OrbitalId> }
   | { focus: EventId.Ambush, removed: Optional<{ orbital: OrbitalId, player: PlayerId }> }
   | { focus: EventId.CaptainYvgeny }
-  | { focus: EventId.StealthShips, selectedFleetGroup: Optional<{ orbital: OrbitalId, count: number }> }
-  | { focus: EventId.HeavyBurn, remainingFleetGroups: number, selectedFleetGroup: Optional<{ orbital: OrbitalId, count: number }> }
+  | { focus: EventId.StealthShips, selectedFleet: Optional<OrbitalId> }
+  | { focus: EventId.HeavyBurn, remaining: number, fleetsPermitted: number[], selectedFleetGroup: Optional<{ orbital: OrbitalId, count: number }> }
   | { focus: EventId.Razorback, selectedFleet: Optional<OrbitalId> }
-  | { focus: EventId.AdmiralSouther, remainingFleets: OrbitalId[], selectedFleetGroup: Optional<{ orbital: OrbitalId, count: number }> }
+  | { focus: EventId.AdmiralSouther, remaining: number, fleetsPermitted: number[], selectedFleetGroup: Optional<{ orbital: OrbitalId, count: number }> }
   ;
 
+export type GameStatePhaseEventPhase =
+  | ({ phase: "ap turn initiative event", turn: PlayerId })
+  | ({ phase: "event turn event", turn: PlayerId })
+  | ({ phase: "score turn kept event", turn: PlayerId, bonusSector: SectorId, action: PlayerId })
+  ;
 export type GameStatePhase =
+  | (GameStatePhaseEventPhase & GameStateEventPhase)
   | { phase: "start", turn: PlayerId, focus: Optional<EventId> }
   | { phase: "ap turn deciding mao-kwik", turn: PlayerId, focus: EventId }
   | ({ phase: "ap turn ap", turn: PlayerId, focus: EventId } & GameStateAPPhase)
+  | { phase: "ap turn deciding miller", turn: PlayerId, focus: EventId }
   | { phase: "ap turn initiative deciding", turn: PlayerId, focus: EventId }
-  | ({ phase: "ap turn initiative event", turn: PlayerId } & GameStateEventPhase)
-  | ({ phase: "event turn event", turn: PlayerId } & GameStateEventPhase)
+  // ap turn initiative event
+  // event turn event
   | { phase: "score turn deciding sector", turn: PlayerId }
   | { phase: "score turn kept event deciding", turn: PlayerId, bonusSector: SectorId, action: PlayerId }
-  | ({ phase: "score turn kept event", turn: PlayerId, bonusSector: SectorId, action: PlayerId } & GameStateEventPhase)
+  // score turn kept event
   | { phase: "game over" }
   ;
 
