@@ -211,7 +211,7 @@ export const events: Event[] = [
   },
   {
     id: EventId.Assassin,
-    title: "Bold Assassin",
+    title: "Assassin",
     subtitle: opt("K. Nikil, Black Sky"),
     text: "Both players must discard one Kept card.",
     ap: 2,

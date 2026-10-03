@@ -176,7 +176,7 @@ export default function App({ }: AppProps) {
       || eventPhase.focus === EventId.Cotyar
     ) throw `should've been handled above`;
 
-    if (eventPhase.focus === EventId.Assassin) return `${players[eventPhase.assassinAction]}, select a kept card to discard.`;
+    if (eventPhase.focus === EventId.Assassin) return `${players[eventPhase.assassinAction]?.name}, select a kept card to discard.`;
     if (eventPhase.focus === EventId.CovertOp) return `${players[phase.action]?.name}, select ${eventPhase.selectedInfluence.hasValue ? "another" : "an"} influence to swap.`;
     if (eventPhase.focus === EventId.VoicesEros) return `${players[phase.action]?.name}, place influence in ${sectors[eventPhase.placingSector]?.name}.`;
     if (eventPhase.focus === EventId.DestructionDeimos) return `${players[phase.action]?.name}, place influence in an Earth base.`;
@@ -230,7 +230,10 @@ export default function App({ }: AppProps) {
 
   const eventCardDivs = events.map(event =>
     <div style={{ width: "200px" }}>
-      <div style={{ fontSize: 24 }}>{event.title}</div>
+      <div>
+        <span style={{ fontSize: 24 }}>{event.title} </span>
+        <span style={{ fontSize: 12 }}>({event.id})</span>
+      </div>
       <div>{optValueOr(event.subtitle, undefined)}</div>
       <div>{event.ap} AP</div>
       <div style={{
@@ -374,6 +377,11 @@ export default function App({ }: AppProps) {
       board: {
         ...newState.board,
         cp: map2(newState.board.cp, (cp, p) => cp + points[p]),
+        fleets: players.reduce((fleets, player) =>
+          fleets.withMap(player.homeOrbital, oFleets =>
+            withMap2(oFleets, player.id, f =>
+              f + ((newState.board.fleets.map(o => o[player.id]).reduce((a, b) => a + b) < FLEET_COUNT) ? 1 : 0))),
+          newState.board.fleets),
       },
     });
   }
@@ -1678,6 +1686,10 @@ export default function App({ }: AppProps) {
                     )
                     && (
                       (
+                        gameState.phase.focus === EventId.Assassin
+                        && gameState.board.kept[gameState.phase.assassinAction].length == 0
+                      )
+                      || (
                         gameState.phase.focus === EventId.CovertOp
                         && gameState.board.influence.reduce((a, b) => [a[0] + b[0], a[1] + b[1]]).some(pInfluence => pInfluence == 0)
                       )
@@ -1952,6 +1964,10 @@ export default function App({ }: AppProps) {
                     )
                     && (
                       (
+                        gameState.phase.focus === EventId.Assassin
+                        && gameState.board.kept[gameState.phase.assassinAction].length == 0
+                      )
+                      || (
                         gameState.phase.focus === EventId.CovertOp
                         && gameState.board.influence.reduce((a, b) => [a[0] + b[0], a[1] + b[1]]).some(pInfluence => pInfluence == 0)
                       )
@@ -2053,10 +2069,37 @@ export default function App({ }: AppProps) {
                       || gameState.phase.phase === "score turn kept event"
                     )
                   ) {
-                    endEventAndSetGameState({
-                      ...gameState,
-                      phase: gameState.phase,
-                    });
+                    const action =
+                      gameState.phase.phase === "ap turn initiative event"
+                        ? players[gameState.phase.turn].opposite
+                        : gameState.phase.phase === "event turn event"
+                          ? gameState.phase.turn
+                          : satisfiesCheck<"score turn kept event">(gameState.phase.phase)(gameState.phase.action);
+                    if (gameState.phase.focus === EventId.Assassin) {
+                      if (
+                        gameState.phase.assassinAction == action
+                        && gameState.board.kept[players[action].opposite].length > 0
+                      ) {
+                        setGameState({
+                          ...gameState,
+                          phase: {
+                            ...gameState.phase,
+                            assassinAction: players[action].opposite,
+                          },
+                        });
+                      } else {
+                        endEventAndSetGameState({
+                          ...gameState,
+                          phase: gameState.phase,
+                        });
+                      }
+
+                    } else {
+                      endEventAndSetGameState({
+                        ...gameState,
+                        phase: gameState.phase,
+                      });
+                    }
                   }
                 }}
               >
@@ -2159,7 +2202,7 @@ export default function App({ }: AppProps) {
             <div key={p.id}>
               <table><tbody><tr>
                 <td style={{ border: "medium solid black" }}>
-                  <div>{p.name}</div>
+                  <div>{p.id === PlayerId.MCR ? "🎴" : "🌐"} {p.name} {p.id === PlayerId.MCR ? "🚀" : "🛰️"}</div>
                   <div>CP: {gameState.board.cp[p.id]}</div>
                   <div>Kept cards:</div>
                 </td>
@@ -2260,7 +2303,7 @@ export default function App({ }: AppProps) {
                               phase: gameState.phase,
                               board: {
                                 ...gameState.board,
-                                kept: withMap2(gameState.board.kept, p.id, pKept => pKept.slice(0, iKept).concat(pKept.slice(iKept))),
+                                kept: withMap2(gameState.board.kept, p.id, pKept => pKept.slice(0, iKept).concat(pKept.slice(iKept + 1))),
                               },
                             },
                             eventPhase => ({
@@ -2282,7 +2325,7 @@ export default function App({ }: AppProps) {
                               phase: gameState.phase,
                               board: {
                                 ...gameState.board,
-                                kept: withMap2(gameState.board.kept, p.id, pKept => pKept.slice(0, iKept).concat(pKept.slice(iKept))),
+                                kept: withMap2(gameState.board.kept, p.id, pKept => pKept.slice(0, iKept).concat(pKept.slice(iKept + 1))),
                               },
                             },
                             eventPhase => ({
@@ -2298,6 +2341,12 @@ export default function App({ }: AppProps) {
                           || gameState.phase.phase === "event turn event"
                           || gameState.phase.phase === "score turn kept event"
                         ) {
+                          const action =
+                            gameState.phase.phase === "ap turn initiative event"
+                              ? players[gameState.phase.turn].opposite
+                              : gameState.phase.phase === "event turn event"
+                                ? gameState.phase.turn
+                                : satisfiesCheck<"score turn kept event">(gameState.phase.phase)(gameState.phase.action);
                           if (
                             gameState.phase.focus === EventId.Assassin
                             && gameState.phase.assassinAction === p.id
@@ -2307,22 +2356,22 @@ export default function App({ }: AppProps) {
                               kept: withMap2(gameState.board.kept, p.id, kept => kept.filter(e => e != event))
                             }
                             if (
-                              gameState.phase.assassinAction != gameState.phase.turn
-                              && gameState.board.kept[gameState.phase.turn].length > 0
+                              gameState.phase.assassinAction == action
+                              && gameState.board.kept[players[action].opposite].length > 0
                             ) {
-                              endEventAndSetGameState({
-                                ...gameState,
-                                board,
-                                phase: gameState.phase,
-                              });
-                            } else {
                               setGameState({
                                 ...gameState,
                                 board,
                                 phase: {
                                   ...gameState.phase,
-                                  assassinAction: players[gameState.phase.turn].opposite,
+                                  assassinAction: players[action].opposite,
                                 },
+                              });
+                            } else {
+                              endEventAndSetGameState({
+                                ...gameState,
+                                board,
+                                phase: gameState.phase,
                               });
                             }
                           }
