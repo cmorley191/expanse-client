@@ -247,7 +247,7 @@ export default function App({ }: AppProps) {
         <div>
           {event.factions[0] ? "🎴" : undefined}
           {event.factions[1] ? "🌐" : undefined}
-          {event.text}
+          {event.shortText}
         </div>
         {event.modelImplemented ? undefined : <div style={{ fontSize: 8 }}>(not yet implemented in model)</div>}
       </div>
