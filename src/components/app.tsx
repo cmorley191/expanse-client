@@ -1,12 +1,43 @@
 import "../core/array_extensions";
 
 import * as React from "react";
+import { motion, Transition } from "motion/react";
+
 import { BandId, bands, BaseId, bases, bonusSectorBonusPoints, Card, CardType, EventId, EventIdKeepOnly, events, FLEET_COUNT, GameState, GameStateAPPhase, GameStateEventPhase, GameStatePhase, GameStatePhaseEventPhase, NONSCORES_PER_PILE, OrbitalId, orbitals, PILES, PlayerId, players, ResourceId, resources, SCORES_PER_PILE, SectorId, sectors, TRACK_COUNT, trackCost } from "../game/game_types";
-import { assertType, getRandomInt, map2, satisfiesCheck, withMap2, withMap3 } from "../core/misc";
-import { nullopt, opt, Optional, optValueOr } from "../core/optional";
+import { assertType, getRandomInt, lerp, map2, satisfiesCheck, with2, withMap2, withMap3 } from "../core/misc";
+import { nullopt, opt, Optional, optMap } from "../core/optional";
 
 
 type AppProps = {};
+
+type History =
+  & { turn: PlayerId, card: Card }
+  & (
+    | {
+      type: "play kept",
+      card: Card & { type: CardType.Event },
+    }
+    | (
+      //& { iTrack: number }
+      & (
+        | {
+          type: "track ap",
+          card: Card & { type: CardType.Event },
+          eventUse: "self miller" | "initiative keep" | "initiative use" | "pass"
+        }
+        | {
+          type: "track event" | "keep track",
+          card: Card & { type: CardType.Event },
+        }
+        | {
+          type: "score"
+          card: Card & { type: CardType.Score },
+          bonusSector: SectorId,
+          events: [Optional<EventId>, Optional<EventId>],
+        }
+      )
+    )
+  );
 
 export default function App({ }: AppProps) {
   const [gameState, setGameState] = React.useState<GameState>(() => {
@@ -68,13 +99,16 @@ export default function App({ }: AppProps) {
     };
   });
 
+  const [history, setHistory] = React.useState<History[]>([]);
+  const [completedHistoryLength, setCompletedHistoryLength] = React.useState(0);
+
   const phaseInstructions = ((): string => {
     if (gameState.phase.phase === "game over") return "Game over!";
 
 
     if (gameState.phase.phase === "start") {
       if (gameState.phase.focus.hasValue) return `${players[gameState.phase.turn]?.name}, choose what to do with the selected card.`;
-      else return `${players[gameState.phase.turn]?.name}, choose a kept card or a track card.`;
+      else return `${players[gameState.phase.turn]?.name}, choose ${gameState.board.kept[gameState.phase.turn].length != 0 ? "a kept card or " : ""}a track card.`;
     }
     // mao-kwik
     // ap later
@@ -229,27 +263,64 @@ export default function App({ }: AppProps) {
   })();
 
   const eventCardDivs = events.map(event =>
-    <div style={{ width: "200px" }}>
-      <div>
-        <span style={{ fontSize: 24 }}>{event.title} </span>
-        <span style={{ fontSize: 12 }}>({event.id})</span>
+    <div style={{ position: "relative", textAlign: "center", padding: "0.1dvw" }}>
+      <div style={{ fontSize: "1.8cqw" }}>{event.ap} AP</div>
+      <div style={{
+        position: "absolute",
+        top: "0.1dvw",
+        right: "0.1dvw",
+        fontSize: "0.8cqw"
+      }}>
+        ({event.id})
       </div>
-      <div>{optValueOr(event.subtitle, undefined)}</div>
-      <div>{event.ap} AP</div>
       <div style={{
         border:
           (event.factions.filter(x => x).length != 1)
-            ? "medium dashed magenta"
+            ? "0.2dvw dashed magenta"
             : (event.factions[0])
-              ? "medium dashed red"
-              : "medium dashed blue",
+              ? "0.2dvw dashed red"
+              : "0.2dvw dashed blue",
       }}>
-        <div>
-          {event.factions[0] ? "🎴" : undefined}
-          {event.factions[1] ? "🌐" : undefined}
-          {event.shortText}
+        <div style={{ display: "inline-flex", alignItems: "center" }}>
+          <span style={{ fontSize: "0.7cqw" }}>
+            {event.factions[PlayerId.MCR] ? "🎴" : ""}
+            {event.factions[PlayerId.UN] ? "🌐" : ""}
+            &nbsp;
+          </span>
+          <span style={{ fontSize: "1.0cqw" }}>{event.title}</span>
         </div>
-        {event.modelImplemented ? undefined : <div style={{ fontSize: 8 }}>(not yet implemented in model)</div>}
+        <div style={{ fontSize: "0.8cqw" }}>{event.shortText}</div>
+      </div>
+    </div>
+  );
+
+  const eventCardKeptDivs = events.map(event =>
+    <div style={{ position: "relative", textAlign: "center", padding: "0.1dvw" }}>
+      <div style={{
+        position: "absolute",
+        top: "0.1dvw",
+        right: "0.1dvw",
+        fontSize: "0.8cqw"
+      }}>
+        ({event.id})
+      </div>
+      <div style={{
+        border:
+          (event.factions.filter(x => x).length != 1)
+            ? "0.2dvw dashed magenta"
+            : (event.factions[0])
+              ? "0.2dvw dashed red"
+              : "0.2dvw dashed blue",
+      }}>
+        <div style={{ display: "inline-flex", alignItems: "center" }}>
+          <span style={{ fontSize: "0.7cqw" }}>
+            {event.factions[PlayerId.MCR] ? "🎴" : ""}
+            {event.factions[PlayerId.UN] ? "🌐" : ""}
+            &nbsp;
+          </span>
+          <span style={{ fontSize: "1.0cqw" }}>{event.title}</span>
+        </div>
+        <div style={{ fontSize: "0.8cqw" }}>{event.shortText}</div>
       </div>
     </div>
   );
@@ -262,6 +333,10 @@ export default function App({ }: AppProps) {
       scoreAndSetGameState(nullopt, {
         ...newState,
         phase: { phase: "game over" },
+        board: {
+          ...newState.board,
+          cardTrack: newState.board.cardTrack.concat([{ type: CardType.Score }]),
+        },
       });
     } else {
       setGameState({
@@ -298,6 +373,14 @@ export default function App({ }: AppProps) {
             },
           });
         } else {
+          setHistory(history.concat([{
+            type: "track ap",
+            turn: newState.phase.turn,
+            card: { type: CardType.Event, event: newState.phase.focus },
+            eventUse: "pass",
+          }]));
+          setCompletedHistoryLength(completedHistoryLength + 1);
+
           drawAndSetGameState({
             ...newState,
             phase: {
@@ -372,6 +455,7 @@ export default function App({ }: AppProps) {
       );
     }).reduce((a, b) => [a[0] + b[0], a[1] + b[1]]);
 
+    setCompletedHistoryLength(completedHistoryLength + 1);
     (bonusSector.hasValue ? drawAndSetGameState : setGameState)({
       ...newState,
       board: {
@@ -387,10 +471,23 @@ export default function App({ }: AppProps) {
   }
 
   function endEventAndSetGameState(newState: GameState & { phase: GameStatePhaseEventPhase }) {
+    if (newState.board.cardTrack.length === TRACK_COUNT) {
+      // kept event
+      setHistory(history.concat([{
+        type: "play kept",
+        turn: newState.phase.turn,
+        card: {
+          type: CardType.Event,
+          event: newState.phase.focus,
+        },
+      }]));
+    }
+
     if (
       newState.phase.phase === "ap turn initiative event"
       || newState.phase.phase === "event turn event"
     ) {
+      setCompletedHistoryLength(completedHistoryLength + 1);
       ((newState.board.cardTrack.length < TRACK_COUNT) ? drawAndSetGameState : setGameState)({
         ...newState,
         phase: {
@@ -696,6 +793,14 @@ export default function App({ }: AppProps) {
       gameState.phase.phase === "score turn deciding sector"
       && gameState.board.bonusSectorsRemaining[sector] > 0
     ) {
+      setHistory(history.concat([{
+        type: "score",
+        card: { type: CardType.Score },
+        turn: gameState.phase.turn,
+        bonusSector: sector,
+        events: [nullopt, nullopt],
+      }]));
+
       if (gameState.board.kept[players[gameState.phase.turn].opposite].length != 0) {
         setGameState({
           ...gameState,
@@ -1185,34 +1290,1319 @@ export default function App({ }: AppProps) {
     }
   }
 
-  const actionPlayer: PlayerId = (() => {
-    if (gameState.phase.phase === "game over") return PlayerId.MCR;
-    if (
-      gameState.phase.phase === "start"
-      || gameState.phase.phase === "ap turn ap"
-      || gameState.phase.phase === "ap turn deciding mao-kwik"
-      || gameState.phase.phase === "ap turn deciding miller"
-      || gameState.phase.phase === "score turn deciding sector"
-    ) return gameState.phase.turn;
-    if (
-      gameState.phase.phase === "ap turn initiative deciding"
-      || gameState.phase.phase === "score turn kept event deciding"
-    ) return players[gameState.phase.turn].opposite;
-    assertType<
-      | "ap turn initiative event"
-      | "event turn event"
-      | "score turn kept event"
-    >(gameState.phase.phase);
-    if (gameState.phase.focus === EventId.Assassin) return gameState.phase.assassinAction;
-    else return gameState.phase.turn;
-  })();
+  const lineWidth = "0.1dvw";
 
   return (
-    <div style={{ textAlign: "center", userSelect: "none", cursor: "default" }}>
-      <div>
-        <span style={{ fontSize: 20 }}>{phaseInstructions}</span>
+    <div style={{ display: "flex", width: "100%", height: "100%", userSelect: "none", cursor: "default" }}>
+      <div style={{ flex: 1, width: "100%", height: "100%", position: "relative" }}>
+        <div // line
+          style={{
+            width: "0.1dvw",
+            height: "100%",
+            position: "absolute",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background:
+              "  linear-gradient("
+              + "  to bottom, "
+              + "  rgba(82, 162, 253, 1.0) 0%,"
+              + "  rgba(82, 162, 253, 1.0) 50%,"
+              + "  rgba(109, 164, 228, 0.4) 60%,"
+              + "  rgba(123, 154, 189, 0) 95%"
+              + ")",
+            zIndex: 1,
+          }}
+        />
+        <div style={{ // timeline content
+          width: "100%",
+          height: "100%",
+          boxSizing: "border-box",
+          position: "relative",
+        }}>
+          {
+            (() => {
+              const maxHistoryLength = (NONSCORES_PER_PILE + SCORES_PER_PILE) * PILES;
+              const maxHistoryFlex = 0.4;
+              const totalHistoryFlex = lerp(0, maxHistoryFlex, Math.pow(history.length / maxHistoryLength, 0.8));
+              const historyFlexes = (() => {
+                if (history.length === 0) return [];
+                const unnormalized = history.map((_, iHistory) =>
+                  Math.pow(
+                    1 - ((history.length - iHistory) / maxHistoryLength),
+                    lerp(1, 3, Math.pow(history.length / maxHistoryLength, 0.2))
+                  ));
+                const totalUnnormalized = unnormalized.reduce((a, b) => a + b);
+                const minPerHistory = 0.7 / maxHistoryLength;
+                return unnormalized.map(x => minPerHistory + x * totalHistoryFlex / Math.max(0.01, totalUnnormalized - minPerHistory * history.length));
+              })();
+              //const minHistoryMargin = "0.2dvh";
+              const transitionTime = "0.4s";
+              const borderColor = "rgba(82, 162, 253, 1.0)";
+
+              const pastDotWidth = "0.6dvh";
+              const pastBorderWidth = "0.2dvh";
+              const todayDotWidth = "1.1dvh";
+              const todayBorderWidth = "0.3dvh";
+              const historyTodayMargin = 0;//`calc(${todayDotWidth} / 2 + ${todayBorderWidth} / 2 - ${pastDotWidth} / 2 - ${pastBorderWidth}`;
+              const trackHeight = "10dvh";
+              const sharedTrackSpacing = 0.2;
+              const motionTransition: Transition<any> = { type: "tween", duration: parseFloat(transitionTime.substring(0, transitionTime.length - 1)), ease: "easeInOut" };
+
+              return <>
+                <div // padding
+                  style={{
+                    height: `calc(8dvh - ${lerp(0, maxHistoryFlex, Math.pow(totalHistoryFlex / maxHistoryFlex, 2.5)) * 100}%)`,
+                    minHeight: "2dvh",
+                    transition: `height ${transitionTime} ease-in-out`,
+                  }}
+                />
+                {
+                  [
+                    ...history.map((historyItem, iHistory) => {
+                      const key = (() => {
+                        if (historyItem.card.type === CardType.Score) return `score ${iHistory}`;
+                        if (historyItem.type === "play kept") return `kept ${iHistory}`;
+                        return `event ${historyItem.card.event}`;
+                      })();
+                      return <motion.div // history card
+                        key={key}
+                        layout="position"
+                        layoutId={key}
+                        transition={motionTransition}
+                        style={{
+                          width: "100%",
+                          height: `${(historyFlexes[iHistory] ?? 0) * (totalHistoryFlex / historyFlexes.reduce((a, b) => a + b)) * 100}%`,
+                          //minHeight: `calc(${pastDotWidth} + ${pastBorderWidth} * 2 + ${minHistoryMargin})`,
+                          minHeight: 0,
+                          position: "relative",
+                          transition: `height ${transitionTime} ease-in-out, min-height ${transitionTime} ease-in-out, transform ${transitionTime} ease-in-out`,
+                          zIndex: 2,
+                        }}
+                      >
+                        <motion.div // dot
+                          layout
+                          transition={motionTransition}
+                          style={{
+                            width: pastDotWidth,
+                            height: pastDotWidth,
+                            position: "absolute",
+                            left: "50%",
+                            top: "0%",
+                            x: "-50%",
+                            y: "-50%",
+                            backgroundColor:
+                              historyItem.type === "score"
+                                ? "gold"
+                                : historyItem.turn === PlayerId.MCR
+                                  ? "red"
+                                  : "blue",
+                            border: `${pastBorderWidth} solid ${borderColor}`,
+                            borderRadius: "50%",
+                          }}
+                        />
+                        <motion.div // card box
+                          layout
+                          transition={motionTransition}
+                          style={{
+                            width: "50%",
+                            position: "absolute",
+                            left: historyItem.turn === 0 ? "0%" : "50%",
+                            y: "-50%",
+                            paddingLeft: "1dvw",
+                            paddingRight: "1dvw",
+                            boxSizing: "border-box",
+                            opacity: 0,
+                          }}>
+                          <div
+                            style={{
+                              position: "relative",
+                              border: "0.3dvw solid black",
+                            }}
+                          >
+                            <div style={{
+                              width: "0.25dvw",
+                              height: "0.25dvw",
+                              position: "absolute",
+                              top: "50%",
+                              ...(
+                                historyItem.turn === 0
+                                  ? {
+                                    right: 0,
+                                    transform: `translate(calc(0.3dvw + 50%), -50%) rotate(45deg)`,
+                                  }
+                                  : {
+                                    left: 0,
+                                    transform: `translate(calc(-0.3dvw - 50%), -50%) rotate(calc(45deg - 180deg))`,
+                                  }
+                              ),
+                              borderTop: "0.3dvw solid black",
+                              borderRight: "0.3dvw solid black",
+                            }} />
+                            {
+                              historyItem.card.type === CardType.Score
+                                ? <div style={{ fontSize: 32, width: 200 }}>Score</div>
+                                : eventCardDivs[historyItem.card.event]
+                            }
+                          </div>
+                        </motion.div>
+                      </motion.div >;
+                    }),
+
+                    ...(() => { // focus
+                      if (gameState.phase.phase === "game over") return [];
+                      const focus = ((): Optional<Card> => {
+                        if (gameState.phase.phase === "start") return optMap(gameState.phase.focus, event => ({ type: CardType.Event, event }));
+                        if (
+                          gameState.phase.phase === "score turn deciding sector"
+                          || gameState.phase.phase === "score turn kept event"
+                          || gameState.phase.phase === "score turn kept event deciding"
+                        ) return opt({ type: CardType.Score });
+                        return opt({ type: CardType.Event, event: gameState.phase.focus });
+                      })();
+                      if (focus.hasValue === false) return [];
+
+                      const key = (() => {
+                        if (focus.value.type === CardType.Score) return `score ${history.length}`;
+                        const focusValue = focus.value;
+                        if (history.some(h => h.card.type === CardType.Event && h.card.event === focusValue.event)) return `kept ${history.length}`;
+                        return `event ${focus.value.event}`;
+                      })();
+
+                      return [<motion.div
+                        key={key}
+                        layout="position"
+                        layoutId={key}
+                        transition={motionTransition}
+                        style={{
+                          width: "100%",
+                          height: "0dvh",
+                          minHeight: 0,
+                          position: "relative",
+                          transition: `height ${transitionTime} ease-in-out, min-height ${transitionTime} ease-in-out`,
+                          zIndex: 2,
+                        }}
+                      >
+                        <motion.div // dot
+                          layout
+                          transition={motionTransition}
+                          style={{
+                            width: `0.6dvh`,
+                            height: `0.6dvh`,
+                            position: "absolute",
+                            left: "50%",
+                            top: "0%",
+                            x: "-50%",
+                            y: "-50%",
+                            backgroundColor:
+                              focus.value.type === CardType.Score
+                                ? "gold"
+                                : gameState.phase.turn === PlayerId.MCR
+                                  ? "red"
+                                  : "blue",
+                            border: `0.2dvh solid ${borderColor}`,
+                            borderRadius: "50%",
+                          }}
+                        />
+                        <motion.div // card box
+                          layout
+                          transition={motionTransition}
+                          style={{
+                            width: "50%",
+                            position: "absolute",
+                            left: gameState.phase.turn === 0 ? "0%" : "50%",
+                            y: "-50%",
+                            paddingLeft: "1dvw",
+                            paddingRight: "1dvw",
+                            boxSizing: "border-box",
+                          }}>
+                          <div
+                            style={{
+                              position: "relative",
+                              border: "0.3dvw solid black",
+                            }}
+                          >
+                            <div style={{
+                              width: "0.25dvw",
+                              height: "0.25dvw",
+                              position: "absolute",
+                              top: "50%",
+                              ...(
+                                gameState.phase.turn === 0
+                                  ? {
+                                    right: 0,
+                                    transform: `translate(calc(0.3dvw + 50%), -50%) rotate(45deg)`,
+                                  }
+                                  : {
+                                    left: 0,
+                                    transform: `translate(calc(-0.3dvw - 50%), -50%) rotate(calc(45deg - 180deg))`,
+                                  }
+                              ),
+                              borderTop: "0.3dvw solid black",
+                              borderRight: "0.3dvw solid black",
+                            }} />
+                            {
+                              focus.value.type === CardType.Score
+                                ? <div style={{ fontSize: 32, width: 200 }}>Score</div>
+                                : eventCardDivs[focus.value.event]
+                            }
+                          </div>
+                        </motion.div>
+                      </motion.div>];
+                    })(),
+
+                    <motion.div // today
+                      key="today"
+                      layout
+                      layoutId="today"
+                      transition={motionTransition}
+                      style={{
+                        width: "100%",
+                        position: "relative",
+                      }}>
+                      <div // dot
+                        style={{
+                          width: todayDotWidth,
+                          height: todayDotWidth,
+                          position: "absolute",
+                          left: "50%",
+                          top: `calc(${todayBorderWidth} / 2)`,
+                          transform: "translate(-50%, -50%)",
+                          backgroundColor: (gameState.phase.phase === "game over" || gameState.phase.turn === PlayerId.MCR) ? "red" : "blue",
+                          border: `${todayBorderWidth} solid ${borderColor}`,
+                          borderRadius: "50%",
+                          zIndex: 4,
+                          transition: `background-color ${transitionTime} ease-in-out`,
+                        }}
+                      />
+                      <motion.div // date box
+                        layout
+                        transition={motionTransition}
+                        style={{
+                          position: "relative",
+                          marginTop: historyTodayMargin,
+                          marginBottom: "1dvh",
+                          backgroundColor: "rgba(200, 200, 200, 1.0)",
+                          zIndex: 3,
+                          display: "flex",
+                          ...(
+                            (
+                              gameState.phase.phase === "game over"
+                              || (
+                                gameState.phase.phase === "start"
+                                && gameState.phase.focus.hasValue === false
+                              )
+                            )
+                              ? {
+                                width: "60%",
+                                height: "5dvh",
+                                marginLeft: "20%",
+                              }
+                              : {
+                                width: `calc(50% - 1dvw + ${lineWidth} / 2)`,
+                                height: `calc(5dvh - ${todayDotWidth} / 2 - ${todayBorderWidth} / 2)`,
+                                marginLeft: gameState.phase.turn === 0 ? `calc(50% - ${lineWidth} / 2)` : "1dvw",
+                              }
+                          ),
+                        }}
+                      >
+                        <motion.div // border
+                          layout
+                          transition={motionTransition}
+                          style={{
+                            flexGrow: 1,
+                            border: `${todayBorderWidth} solid ${borderColor}`,
+                            borderRadius: "5%",
+                            display: "flex",
+                          }}>
+                          <motion.div // text container (scaling)
+                            layout
+                            transition={motionTransition}
+                            style={{
+                              flexGrow: 1,
+                              marginTop:
+                                (
+                                  gameState.phase.phase === "game over"
+                                  || (
+                                    gameState.phase.phase === "start"
+                                    && gameState.phase.focus.hasValue === false
+                                  )
+                                )
+                                  ? `calc(${todayDotWidth} / 2 + ${todayBorderWidth} / 2)`
+                                  : 0,
+                              fontSize: "1.8cqh",
+                              justifyItems: "center",
+                              alignContent: "center",
+                            }}>
+                            <motion.div // text (non-scaling)
+                              layout="position"
+                              transition={motionTransition}
+                            >
+                              {
+                                new Date(new Date().getFullYear() + 300, 0, 1 + (history.length / maxHistoryLength) * 366)
+                                  .toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
+                              }
+                            </motion.div>
+                          </motion.div>
+                        </motion.div>
+                      </motion.div>
+                    </motion.div>,
+
+                    <motion.div // buttons
+                      key="buttons"
+                      layout="position"
+                      transition={motionTransition}
+                      layoutId="buttons"
+                      style={{
+                        width: "100%",
+                        justifyItems: "center",
+                      }}
+                    >
+                      <div style={{
+                        margin: "1dvw",
+                        display:
+                          (
+                            (
+                              gameState.phase.phase === "start"
+                              && gameState.phase.focus.hasValue
+                            )
+                            || (gameState.phase.phase === "ap turn deciding mao-kwik")
+                            || (
+                              (
+                                gameState.phase.phase === "ap turn initiative event"
+                                || gameState.phase.phase === "event turn event"
+                                || gameState.phase.phase === "score turn kept event"
+                              )
+                              && gameState.phase.focus === EventId.TheHybrid
+                              && gameState.phase.selected.hasValue
+                            )
+
+                            || (
+                              gameState.phase.phase === "start"
+                              && gameState.phase.focus.hasValue
+                              && gameState.phase.focus.value != EventId.Miller
+                              && gameState.phase.focus.value != EventId.MaoKwik
+                              && events[gameState.phase.focus.value]?.factions[gameState.phase.turn]
+                            )
+                            || (
+                              gameState.phase.phase === "ap turn initiative deciding"
+                              && gameState.phase.focus != EventId.Miller
+                              && gameState.phase.focus != EventId.MaoKwik
+                            )
+
+                            || (
+                              gameState.phase.phase === "start"
+                              && gameState.phase.focus.hasValue
+                              && gameState.board.cp[gameState.phase.turn] >= (events[gameState.phase.focus.value]?.keepCost ?? 0)
+                              && events[gameState.phase.focus.value]?.factions[gameState.phase.turn]
+                            )
+                            || (
+                              gameState.phase.phase === "ap turn initiative deciding"
+                              && gameState.board.cp[players[gameState.phase.turn].opposite] >= (events[gameState.phase.focus]?.keepCost ?? 0)
+                              && events[gameState.phase.focus]?.factions[players[gameState.phase.turn].opposite]
+                            )
+
+                            || (gameState.phase.phase === "ap turn deciding miller")
+                            || (gameState.phase.phase === "ap turn initiative deciding")
+                            || (gameState.phase.phase === "score turn kept event deciding")
+                            || (
+                              (
+                                gameState.phase.phase === "ap turn initiative event"
+                                || gameState.phase.phase === "event turn event"
+                                || gameState.phase.phase === "score turn kept event"
+                              )
+                              && (
+                                (
+                                  gameState.phase.focus === EventId.Assassin
+                                  && gameState.board.kept[gameState.phase.assassinAction].length == 0
+                                )
+                                || (
+                                  gameState.phase.focus === EventId.CovertOp
+                                  && gameState.board.influence.reduce((a, b) => [a[0] + b[0], a[1] + b[1]]).some(pInfluence => pInfluence == 0)
+                                )
+                                || (
+                                  (
+                                    gameState.phase.focus === EventId.BlockadeEarth
+                                    || gameState.phase.focus === EventId.BlockadeMars
+                                  )
+                                  && gameState.phase.placing === false
+                                )
+                                || (gameState.phase.focus === EventId.BlackOps)
+                                || (
+                                  gameState.phase.focus === EventId.JulieMao
+                                  && (() => {
+                                    if (gameState.phase.removedBase.hasValue) {
+                                      const removedBase = gameState.phase.removedBase.value;
+                                      return (
+                                        gameState.board.influence
+                                          .filter((_, base) => bases[base]?.resource === bases[removedBase]?.resource)
+                                          .reduce((total, bInfluence) => total + bInfluence.reduce((a, b) => a + b), 0)
+                                        == 0
+                                      );
+
+                                    } else {
+                                      return (gameState.board.influence.reduce((total, bInfluence) => total + bInfluence.reduce((a, b) => a + b), 0) == 0);
+                                    }
+                                  })()
+                                )
+                                || (
+                                  gameState.phase.focus === EventId.StarHelix
+                                  && gameState.board.influence.every(bInfluence => bInfluence.some(i => i == 0))
+                                )
+                                || (
+                                  gameState.phase.focus === EventId.RiotGear
+                                  && (
+                                    gameState.board.influence
+                                      .filter((_, base) => orbitals[bases[base]?.orbital ?? 0]?.band == BandId.Belt)
+                                      .every(bInfluence => bInfluence.every(i => i == 0))
+                                  )
+                                )
+                                || (gameState.phase.focus === EventId.Ambush)
+                                || (gameState.phase.focus === EventId.HeavyBurn)
+                                || (gameState.phase.focus === EventId.AdmiralSouther)
+                              )
+                            )
+                          )
+                            ? "flex"
+                            : "none"
+                      }}>
+                        <button
+                          disabled={!(
+                            (
+                              gameState.phase.phase === "start"
+                              && gameState.phase.focus.hasValue
+                            )
+                            || (gameState.phase.phase === "ap turn deciding mao-kwik")
+                            || (
+                              (
+                                gameState.phase.phase === "ap turn initiative event"
+                                || gameState.phase.phase === "event turn event"
+                                || gameState.phase.phase === "score turn kept event"
+                              )
+                              && gameState.phase.focus === EventId.TheHybrid
+                              && gameState.phase.selected.hasValue
+                            )
+                          )}
+                          onClick={() => {
+                            if (
+                              gameState.phase.phase === "start"
+                              && gameState.phase.focus.hasValue
+                            ) {
+                              if (gameState.board.kept[gameState.phase.turn].some(kc => kc === EventId.MaoKwik)) {
+                                setGameState({
+                                  ...gameState,
+                                  phase: {
+                                    ...gameState.phase,
+                                    phase: "ap turn deciding mao-kwik",
+                                    focus: gameState.phase.focus.value,
+                                  },
+                                });
+                              } else {
+                                setGameState({
+                                  ...gameState,
+                                  phase: {
+                                    ...gameState.phase,
+                                    phase: "ap turn ap",
+                                    focus: gameState.phase.focus.value,
+                                    ap: events[gameState.phase.focus.value]?.ap ?? 0,
+                                    selectedFleetGroup: nullopt,
+                                  },
+                                });
+                              }
+
+                            } else if (
+                              gameState.phase.phase === "ap turn deciding mao-kwik"
+                            ) {
+                              setGameState({
+                                ...gameState,
+                                phase: {
+                                  ...gameState.phase,
+                                  phase: "ap turn ap",
+                                  focus: gameState.phase.focus,
+                                  ap: events[gameState.phase.focus]?.ap ?? 0,
+                                  selectedFleetGroup: nullopt,
+                                },
+                              });
+
+                            } else if (
+                              (
+                                gameState.phase.phase === "ap turn initiative event"
+                                || gameState.phase.phase === "event turn event"
+                                || gameState.phase.phase === "score turn kept event"
+                              )
+                              && gameState.phase.focus === EventId.TheHybrid
+                              && gameState.phase.selected.hasValue
+                            ) {
+                              const action =
+                                gameState.phase.phase === "ap turn initiative event"
+                                  ? players[gameState.phase.turn].opposite
+                                  : gameState.phase.phase === "event turn event"
+                                    ? gameState.phase.turn
+                                    : gameState.phase.action;
+
+                              const selected = gameState.phase.selected;
+                              endEventAndSetGameState({
+                                ...gameState,
+                                board: {
+                                  ...gameState.board,
+                                  influence: gameState.board.influence.withMap(selected.value.base, influence => {
+                                    const toRemove = events[selected.value.topEvent]?.ap;
+                                    if (toRemove === undefined) throw `bad topEvent`;
+                                    return map2(influence, (i, p) =>
+                                      (p != action)
+                                        ? i - Math.min(i, toRemove)
+                                        : i - Math.min(i, toRemove - Math.min(influence[players[p].opposite], toRemove))
+                                    );
+                                  }),
+                                },
+                                phase: gameState.phase,  // typescript sure is silly sometimes ain't it
+                              });
+                            }
+                          }}
+                        >
+                          Use AP
+                        </button>
+                        <button
+                          disabled={!(
+                            (
+                              gameState.phase.phase === "start"
+                              && gameState.phase.focus.hasValue
+                              && gameState.phase.focus.value != EventId.Miller
+                              && gameState.phase.focus.value != EventId.MaoKwik
+                              && events[gameState.phase.focus.value]?.factions[gameState.phase.turn]
+                            )
+                            || (
+                              gameState.phase.phase === "ap turn initiative deciding"
+                              && gameState.phase.focus != EventId.Miller
+                              && gameState.phase.focus != EventId.MaoKwik
+                            )
+                          )}
+                          onClick={() => {
+                            if (
+                              gameState.phase.phase === "start"
+                              && gameState.phase.focus.hasValue
+                              && gameState.phase.focus.value != EventId.Miller
+                              && gameState.phase.focus.value != EventId.MaoKwik
+                            ) {
+                              setHistory(history.concat([{
+                                type: "track event",
+                                turn: gameState.phase.turn,
+                                card: {
+                                  type: CardType.Event,
+                                  event: gameState.phase.focus.value,
+                                },
+                              }]));
+
+                              const phase = gameState.phase;
+                              startEventAndSetGameState(
+                                {
+                                  ...gameState,
+                                  phase: gameState.phase,
+                                },
+                                eventPhase => ({
+                                  ...phase,
+                                  ...eventPhase,
+                                  phase: "event turn event",
+                                }),
+                                gameState.phase.focus.value
+                              );
+                            } else if (
+                              gameState.phase.phase === "ap turn initiative deciding"
+                              && gameState.phase.focus != EventId.Miller
+                              && gameState.phase.focus != EventId.MaoKwik
+                            ) {
+                              setHistory(history.concat([{
+                                type: "track ap",
+                                turn: gameState.phase.turn,
+                                card: { type: CardType.Event, event: gameState.phase.focus },
+                                eventUse: "initiative use",
+                              }]));
+
+                              const phase = gameState.phase;
+                              startEventAndSetGameState(
+                                {
+                                  ...gameState,
+                                  phase: gameState.phase,
+                                },
+                                eventPhase => ({
+                                  ...phase,
+                                  ...eventPhase,
+                                  phase: "ap turn initiative event",
+                                }),
+                                gameState.phase.focus
+                              );
+                            }
+                          }}
+                        >
+                          Use Event
+                        </button>
+                        <button
+                          disabled={!(
+                            (
+                              gameState.phase.phase === "start"
+                              && gameState.phase.focus.hasValue
+                              && gameState.board.cp[gameState.phase.turn] >= (events[gameState.phase.focus.value]?.keepCost ?? 0)
+                              && events[gameState.phase.focus.value]?.factions[gameState.phase.turn]
+                            )
+                            || (
+                              gameState.phase.phase === "ap turn initiative deciding"
+                              && gameState.board.cp[players[gameState.phase.turn].opposite] >= (events[gameState.phase.focus]?.keepCost ?? 0)
+                              && events[gameState.phase.focus]?.factions[players[gameState.phase.turn].opposite]
+                            )
+                          )}
+                          onClick={() => {
+                            if (
+                              gameState.phase.phase === "start"
+                              && gameState.phase.focus.hasValue
+                            ) {
+                              setHistory(history.concat([{
+                                type: "keep track",
+                                turn: gameState.phase.turn,
+                                card: {
+                                  type: CardType.Event,
+                                  event: gameState.phase.focus.value,
+                                },
+                              }]));
+                              setCompletedHistoryLength(completedHistoryLength + 1);
+
+                              const focus = gameState.phase.focus;
+                              drawAndSetGameState({
+                                ...gameState,
+                                board: {
+                                  ...gameState.board,
+                                  cp: withMap2(gameState.board.cp, gameState.phase.turn, (cp) => cp - (events[focus.value]?.keepCost ?? 0)),
+                                  kept: withMap2(gameState.board.kept, gameState.phase.turn, (kept) => kept.concat(focus.value)),
+                                },
+                                phase: {
+                                  ...gameState.phase,
+                                  phase: "start",
+                                  turn: players[gameState.phase.turn].opposite,
+                                  focus: nullopt,
+                                },
+                              });
+                            } else if (
+                              gameState.phase.phase === "ap turn initiative deciding"
+                            ) {
+                              setHistory(history.concat([{
+                                type: "track ap",
+                                turn: gameState.phase.turn,
+                                card: { type: CardType.Event, event: gameState.phase.focus },
+                                eventUse: "initiative keep",
+                              }]));
+                              setCompletedHistoryLength(completedHistoryLength + 1);
+
+                              const phase = gameState.phase;
+                              const player = players[gameState.phase.turn].opposite;
+                              drawAndSetGameState({
+                                ...gameState,
+                                board: {
+                                  ...gameState.board,
+                                  cp: withMap2(gameState.board.cp, player, (cp) => cp - (events[phase.focus]?.keepCost ?? 0)),
+                                  kept: withMap2(gameState.board.kept, player, (kept) => kept.concat(phase.focus)),
+                                },
+                                phase: {
+                                  ...gameState.phase,
+                                  phase: "start",
+                                  turn: player,
+                                  focus: nullopt,
+                                },
+                              });
+                            }
+                          }}
+                        >
+                          Keep Event
+                        </button>
+                        <button
+                          disabled={!(
+                            (gameState.phase.phase === "ap turn deciding miller")
+                            || (gameState.phase.phase === "ap turn initiative deciding")
+                            || (gameState.phase.phase === "score turn kept event deciding")
+                            || (
+                              (
+                                gameState.phase.phase === "ap turn initiative event"
+                                || gameState.phase.phase === "event turn event"
+                                || gameState.phase.phase === "score turn kept event"
+                              )
+                              && (
+                                (
+                                  gameState.phase.focus === EventId.Assassin
+                                  && gameState.board.kept[gameState.phase.assassinAction].length == 0
+                                )
+                                || (
+                                  gameState.phase.focus === EventId.CovertOp
+                                  && gameState.board.influence.reduce((a, b) => [a[0] + b[0], a[1] + b[1]]).some(pInfluence => pInfluence == 0)
+                                )
+                                || (
+                                  (
+                                    gameState.phase.focus === EventId.BlockadeEarth
+                                    || gameState.phase.focus === EventId.BlockadeMars
+                                  )
+                                  && gameState.phase.placing === false
+                                )
+                                || (gameState.phase.focus === EventId.BlackOps)
+                                || (
+                                  gameState.phase.focus === EventId.JulieMao
+                                  && (() => {
+                                    if (gameState.phase.removedBase.hasValue) {
+                                      const removedBase = gameState.phase.removedBase.value;
+                                      return (
+                                        gameState.board.influence
+                                          .filter((_, base) => bases[base]?.resource === bases[removedBase]?.resource)
+                                          .reduce((total, bInfluence) => total + bInfluence.reduce((a, b) => a + b), 0)
+                                        == 0
+                                      );
+
+                                    } else {
+                                      return (gameState.board.influence.reduce((total, bInfluence) => total + bInfluence.reduce((a, b) => a + b), 0) == 0);
+                                    }
+                                  })()
+                                )
+                                || (
+                                  gameState.phase.focus === EventId.StarHelix
+                                  && gameState.board.influence.every(bInfluence => bInfluence.some(i => i == 0))
+                                )
+                                || (
+                                  gameState.phase.focus === EventId.RiotGear
+                                  && (
+                                    gameState.board.influence
+                                      .filter((_, base) => orbitals[bases[base]?.orbital ?? 0]?.band == BandId.Belt)
+                                      .every(bInfluence => bInfluence.every(i => i == 0))
+                                  )
+                                )
+                                || (gameState.phase.focus === EventId.Ambush)
+                                || (gameState.phase.focus === EventId.HeavyBurn)
+                                || (gameState.phase.focus === EventId.AdmiralSouther)
+                              )
+                            )
+                          )}
+                          onClick={() => {
+                            if (gameState.phase.phase === "ap turn deciding miller") {
+                              setGameState({
+                                ...gameState,
+                                phase: {
+                                  ...gameState.phase,
+                                  phase: "ap turn initiative deciding",
+                                },
+                              });
+
+                            } else if (gameState.phase.phase === "ap turn initiative deciding") {
+                              setHistory(history.concat([{
+                                type: "track ap",
+                                turn: gameState.phase.turn,
+                                card: { type: CardType.Event, event: gameState.phase.focus },
+                                eventUse: "pass",
+                              }]));
+                              setCompletedHistoryLength(completedHistoryLength + 1);
+
+                              drawAndSetGameState({
+                                ...gameState,
+                                phase: {
+                                  ...gameState.phase,
+                                  phase: "start",
+                                  turn: players[gameState.phase.turn].opposite,
+                                  focus: nullopt,
+                                },
+                              });
+
+                            } else if (gameState.phase.phase === "score turn kept event deciding") {
+                              if (
+                                gameState.phase.action != gameState.phase.turn
+                                && gameState.board.kept[gameState.phase.turn].length > 0
+                              ) {
+                                setGameState({
+                                  ...gameState,
+                                  phase: {
+                                    ...gameState.phase,
+                                    action: gameState.phase.turn,
+                                  },
+                                });
+                              } else {
+                                scoreAndSetGameState(opt(gameState.phase.bonusSector), {
+                                  ...gameState,
+                                  board: {
+                                    ...gameState.board,
+                                    bonusSectorsRemaining: withMap3(gameState.board.bonusSectorsRemaining, gameState.phase.bonusSector, r => r - 1),
+                                  },
+                                  phase: {
+                                    ...gameState.phase,
+                                    phase: "start",
+                                    turn: players[gameState.phase.turn].opposite,
+                                    focus: nullopt,
+                                  },
+                                });
+                              }
+                            } else if (
+                              (
+                                gameState.phase.phase === "ap turn initiative event"
+                                || gameState.phase.phase === "event turn event"
+                                || gameState.phase.phase === "score turn kept event"
+                              )
+                            ) {
+                              const action =
+                                gameState.phase.phase === "ap turn initiative event"
+                                  ? players[gameState.phase.turn].opposite
+                                  : gameState.phase.phase === "event turn event"
+                                    ? gameState.phase.turn
+                                    : satisfiesCheck<"score turn kept event">(gameState.phase.phase)(gameState.phase.action);
+                              if (gameState.phase.focus === EventId.Assassin) {
+                                if (
+                                  gameState.phase.assassinAction == action
+                                  && gameState.board.kept[players[action].opposite].length > 0
+                                ) {
+                                  setGameState({
+                                    ...gameState,
+                                    phase: {
+                                      ...gameState.phase,
+                                      assassinAction: players[action].opposite,
+                                    },
+                                  });
+                                } else {
+                                  endEventAndSetGameState({
+                                    ...gameState,
+                                    phase: gameState.phase,
+                                  });
+                                }
+
+                              } else {
+                                endEventAndSetGameState({
+                                  ...gameState,
+                                  phase: gameState.phase,
+                                });
+                              }
+                            }
+                          }}
+                        >
+                          Pass
+                        </button>
+                      </div>
+                    </motion.div>,
+
+                    <motion.div // scores
+                      key="scores"
+                      layout="position"
+                      layoutId="scores"
+                      transition={motionTransition}
+                      style={{
+                        width: "100%",
+                        display: "grid",
+                        gridTemplateColumns: "repeat(2, 1fr)",
+                        gap: "1dvw",
+                        paddingLeft: "0.5dvw",
+                        paddingRight: "0.5dvw",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      {
+                        players.map(player =>
+                          <div
+                            key={player.id}
+                            style={{
+                              alignSelf: "start",
+                              display: "grid",
+                              gridTemplateAreas: `${player.id === 0 ? `"icon cp"` : `"cp icon"`} "fleets fleets" "keptLabel keptLabel" "keptList keptList"`,
+                              placeItems: "center",
+                              rowGap: "0.4dvw",
+                              paddingTop: "0.4dvw",
+                              paddingBottom: "0.4dvw",
+                              border: gameState.phase.phase !== "game over" && gameState.phase.turn === player.id ? "0.2dvw solid gray" : undefined,
+                              borderRadius: "20%",
+                            }}>
+                            <span style={{ gridArea: "icon", fontSize: "3.5cqw" }}>{player.id === PlayerId.MCR ? "🎴" : "🌐"}</span>
+                            <span style={{ gridArea: "cp", fontSize: "3.5cqw" }}>{gameState.board.cp[player.id]}</span>
+                            <span style={{ gridArea: "fleets", fontSize: "1.2cqw" }}>{(() => {
+                              const fleets = gameState.board.fleets.map(oFleets => oFleets[player.id]).reduce((a, b) => a + b);
+                              return Array(fleets).fill(false).map((_, iFleet) =>
+                                <span key={iFleet} style={{ opacity: iFleet < fleets ? 1 : 0.3 }} >{player.id === PlayerId.MCR ? "🚀" : "🛸"}</span>);
+                            })()}</span>
+                            <span style={{ gridArea: "keptLabel", fontSize: "1.2cqw" }}>{(() => {
+                              const kept = gameState.board.kept[player.id].length;
+                              if (kept == 0) return "";
+                              return `${kept} kept ${kept == 1 ? "card" : "cards"}`;
+                            })()}</span>
+                            <style>{`
+                              .no-scrollbar::-webkit-scrollbar {
+                                display: none;
+                              }
+                            `}</style>
+                            <div
+                              className="no-scrollbar"
+                              style={{
+                                width: "100%",
+                                ...(
+                                  gameState.board.kept[player.id].length === 0
+                                    ? {
+                                      maxHeight: 0,
+                                      marginBottom: 0,
+                                      maskImage: "",
+                                    }
+                                    : (
+                                      gameState.phase.phase === "game over"
+                                      || gameState.phase.turn != player.id
+                                    )
+                                      ? {
+                                        maxHeight: `calc(${trackHeight} * 0.25)`,
+                                        marginBottom: 0,
+                                        maskImage: "linear-gradient(to bottom, black 0%, transparent 100%)",
+                                      }
+                                      : {
+                                        maxHeight: `calc(${trackHeight} * 1.25)`,
+                                        marginBottom: "1dvw",
+                                        maskImage: "linear-gradient(to bottom, black 80%, transparent 100%)",
+                                      }
+                                ),
+                                gridArea: "keptList",
+                                overflowY:
+                                  (
+                                    gameState.phase.phase === "game over"
+                                    || gameState.phase.turn != player.id
+                                  ) ? "clip" : "scroll",
+                              }}>
+                              {
+                                gameState.board.kept[player.id].map(event =>
+                                  <div  // kept card
+                                    style={{
+                                      width: "100%",
+                                      marginBottom: "1dvw",
+                                      position: "relative",
+                                      paddingLeft: "0.5dvw",
+                                      paddingRight: "0.5dvw",
+                                      boxSizing: "border-box",
+                                    }}
+                                  >
+                                    <div // border
+                                      style={{
+                                        border: "0.3dvw solid black",
+                                      }}
+                                      onClick={() => {
+                                        if (event == EventId.Miller) {
+                                          if (
+                                            gameState.phase.phase === "ap turn deciding miller"
+                                            && gameState.phase.focus != EventId.Miller
+                                            && gameState.phase.focus != EventId.MaoKwik
+                                          ) {
+                                            setHistory(history.concat([{
+                                              type: "track ap",
+                                              turn: gameState.phase.turn,
+                                              card: {
+                                                type: CardType.Event,
+                                                event: gameState.phase.focus,
+                                              },
+                                              eventUse: "self miller",
+                                            }]));
+
+                                            const phase = gameState.phase;
+                                            startEventAndSetGameState(
+                                              {
+                                                ...gameState,
+                                                phase: gameState.phase,
+                                                board: {
+                                                  ...gameState.board,
+                                                  kept: withMap2(gameState.board.kept, player.id, kept => kept.filter(e => e != EventId.Miller)),
+                                                },
+                                              },
+                                              eventPhase => ({
+                                                ...phase,
+                                                ...eventPhase,
+                                                phase: "event turn event",
+                                              }),
+                                              gameState.phase.focus
+                                            );
+                                          }
+
+                                        } else if (event == EventId.MaoKwik) {
+                                          if (gameState.phase.phase === "ap turn deciding mao-kwik") {
+                                            setGameState({
+                                              ...gameState,
+                                              board: {
+                                                ...gameState.board,
+                                                kept: withMap2(gameState.board.kept, player.id, kept => kept.filter(e => e != EventId.MaoKwik)),
+                                              },
+                                              phase: {
+                                                ...gameState.phase,
+                                                phase: "ap turn ap",
+                                                ap: 4,
+                                                selectedFleetGroup: nullopt,
+                                              },
+                                            });
+
+                                          } else if (
+                                            (
+                                              gameState.phase.phase === "ap turn initiative event"
+                                              || gameState.phase.phase === "event turn event"
+                                              || gameState.phase.phase === "score turn kept event"
+                                            )
+                                            && gameState.phase.focus === EventId.TheHybrid
+                                            && gameState.phase.selected.hasValue
+                                          ) {
+                                            const action =
+                                              gameState.phase.phase === "ap turn initiative event"
+                                                ? players[gameState.phase.turn].opposite
+                                                : gameState.phase.phase === "event turn event"
+                                                  ? gameState.phase.turn
+                                                  : gameState.phase.action;
+
+                                            const selected = gameState.phase.selected;
+                                            endEventAndSetGameState({
+                                              ...gameState,
+                                              board: {
+                                                ...gameState.board,
+                                                influence: gameState.board.influence.withMap(selected.value.base, influence => {
+                                                  const toRemove = events[selected.value.topEvent]?.ap;
+                                                  if (toRemove === undefined) throw `bad topEvent`;
+                                                  return map2(influence, (i, p) =>
+                                                    (p != action)
+                                                      ? i - Math.min(i, toRemove)
+                                                      : i - Math.min(i, toRemove - Math.min(influence[players[p].opposite], toRemove))
+                                                  );
+                                                }),
+                                              },
+                                              phase: gameState.phase,  // typescript sure is silly sometimes ain't it
+                                            });
+                                          }
+
+                                        } else if (
+                                          gameState.phase.phase === "start"
+                                          && !gameState.phase.focus.hasValue
+                                          && gameState.phase.turn == player.id
+                                        ) {
+                                          const phase = gameState.phase;
+                                          startEventAndSetGameState(
+                                            {
+                                              ...gameState,
+                                              phase: gameState.phase,
+                                              board: {
+                                                ...gameState.board,
+                                                kept: withMap2(gameState.board.kept, player.id, pKept => pKept.filter(k => k != event)),
+                                              },
+                                            },
+                                            eventPhase => ({
+                                              ...phase,
+                                              ...eventPhase,
+                                              phase: "event turn event",
+                                            }),
+                                            event
+                                          );
+
+                                        } else if (
+                                          gameState.phase.phase === "score turn kept event deciding"
+                                          && gameState.phase.action === player.id
+                                        ) {
+                                          const lastHistory = history.get(-1);
+                                          if (
+                                            lastHistory.hasValue
+                                            && lastHistory.value.type === "score"
+                                          ) {
+                                            setHistory(history.slice(0, history.length - 1).concat([{
+                                              ...lastHistory.value,
+                                              events: with2(lastHistory.value.events, gameState.phase.action, opt(event)),
+                                            }]));
+                                          }
+
+                                          const phase = gameState.phase;
+                                          startEventAndSetGameState(
+                                            {
+                                              ...gameState,
+                                              phase: gameState.phase,
+                                              board: {
+                                                ...gameState.board,
+                                                kept: withMap2(gameState.board.kept, player.id, pKept => pKept.filter(k => k != event)),
+                                              },
+                                            },
+                                            eventPhase => ({
+                                              ...phase,
+                                              ...eventPhase,
+                                              phase: "score turn kept event",
+                                            }),
+                                            event
+                                          );
+
+                                        } else if (
+                                          gameState.phase.phase === "ap turn initiative event"
+                                          || gameState.phase.phase === "event turn event"
+                                          || gameState.phase.phase === "score turn kept event"
+                                        ) {
+                                          const action =
+                                            gameState.phase.phase === "ap turn initiative event"
+                                              ? players[gameState.phase.turn].opposite
+                                              : gameState.phase.phase === "event turn event"
+                                                ? gameState.phase.turn
+                                                : satisfiesCheck<"score turn kept event">(gameState.phase.phase)(gameState.phase.action);
+                                          if (
+                                            gameState.phase.focus === EventId.Assassin
+                                            && gameState.phase.assassinAction === player.id
+                                          ) {
+                                            const board: typeof gameState.board = {
+                                              ...gameState.board,
+                                              kept: withMap2(gameState.board.kept, player.id, kept => kept.filter(e => e != event))
+                                            }
+                                            if (
+                                              gameState.phase.assassinAction == action
+                                              && gameState.board.kept[players[action].opposite].length > 0
+                                            ) {
+                                              setGameState({
+                                                ...gameState,
+                                                board,
+                                                phase: {
+                                                  ...gameState.phase,
+                                                  assassinAction: players[action].opposite,
+                                                },
+                                              });
+                                            } else {
+                                              endEventAndSetGameState({
+                                                ...gameState,
+                                                board,
+                                                phase: gameState.phase,
+                                              });
+                                            }
+                                          }
+                                        }
+                                      }}
+                                    >
+                                      {eventCardKeptDivs[event]}
+                                    </div>
+                                  </div>)
+                              }
+                            </div>
+                          </div>
+                        )
+                      }
+                    </motion.div>,
+
+                    ...gameState.board.cardTrack.map((card, iTrack) => {
+                      const side =
+                        (
+                          (
+                            gameState.phase.phase === "game over"
+                            || gameState.phase.turn === 0
+                          )
+                          === (iTrack % 2 === 1)
+                          === (gameState.board.cardTrack.length === TRACK_COUNT)
+                        )
+                          ? "left"
+                          : "right";
+
+                      return <motion.div  // track card
+                        key={card.type === CardType.Score ? `score track ${iTrack}` : `event ${card.event}`}
+                        layout="position"
+                        layoutId={card.type === CardType.Score ? `score track ${iTrack}` : `event ${card.event}`}
+                        transition={motionTransition}
+                        style={{
+                          width: "100%",
+                          marginTop: iTrack === 0 ? `calc(1dvw + ${trackHeight} / 2)` : "1dvw",
+                          height:
+                            iTrack % 2 == 1
+                              ? `calc(${trackHeight} * ${sharedTrackSpacing})`
+                              : `calc(${trackHeight} * ${1 - sharedTrackSpacing})`,
+                          minHeight: 0,
+                          position: "relative",
+                          zIndex: 2,
+                        }}
+                      >
+                        <motion.div // dot
+                          layout
+                          transition={motionTransition}
+                          style={{
+                            width: `0.6dvh`,
+                            height: `0.6dvh`,
+                            position: "absolute",
+                            left: "50%",
+                            top: "0%",
+                            x: "-50%",
+                            y: "-50%",
+                            backgroundColor: card.type === CardType.Score ? "gold" : "LightGray",
+                            border: `0.2dvh solid ${borderColor}`,
+                            borderRadius: "50%",
+                          }}
+                        />
+                        <motion.div // card box
+                          layout
+                          transition={motionTransition}
+                          style={{
+                            width: "50%",
+                            position: "absolute",
+                            left: (side === "left") ? "0%" : "50%",
+                            y: "-50%",
+                            paddingLeft: "1dvw",
+                            paddingRight: "1dvw",
+                            boxSizing: "border-box",
+                          }}>
+                          <div // border
+                            style={{
+                              position: "relative",
+                              border: "0.3dvw solid black",
+                            }}
+                            onClick={() => {
+                              if (
+                                gameState.phase.phase === "start"
+                                && !gameState.phase.focus.hasValue
+                                && gameState.board.cp[gameState.phase.turn] >= (trackCost[iTrack] ?? 0)
+                              ) {
+                                const board: typeof gameState.board = {
+                                  ...gameState.board,
+                                  cp: withMap2(gameState.board.cp, gameState.phase.turn, (cp) => cp - (trackCost[iTrack] ?? 0)),
+                                  cardTrack: gameState.board.cardTrack.slice(0, iTrack).concat(gameState.board.cardTrack.slice(iTrack + 1)),
+                                };
+                                if (card.type === CardType.Event) {
+                                  setGameState({
+                                    ...gameState,
+                                    board,
+                                    phase: {
+                                      ...gameState.phase,
+                                      phase: "start",
+                                      focus: opt(card.event),
+                                    },
+                                  });
+                                } else {
+                                  setGameState({
+                                    ...gameState,
+                                    board,
+                                    phase: {
+                                      ...gameState.phase,
+                                      phase: "score turn deciding sector",
+                                    },
+                                  });
+                                }
+                              }
+                            }}
+                          >
+                            <div style={{ // arrow
+                              width: "0.25dvw",
+                              height: "0.25dvw",
+                              position: "absolute",
+                              top: "50%",
+                              ...(
+                                (side === "left")
+                                  ? {
+                                    right: 0,
+                                    transform: `translate(calc(0.3dvw + 50%), -50%) rotate(45deg)`,
+                                  }
+                                  : {
+                                    left: 0,
+                                    transform: `translate(calc(-0.3dvw - 50%), -50%) rotate(calc(45deg - 180deg))`,
+                                  }
+                              ),
+                              borderTop: "0.3dvw solid black",
+                              borderRight: "0.3dvw solid black",
+                            }} />
+                            { // content
+                              card.type === CardType.Score
+                                ? <div style={{ fontSize: 32, width: 200 }}>Score</div>
+                                : eventCardDivs[card.event]
+                            }
+                          </div>
+                        </motion.div>
+                      </motion.div>;
+                    }),
+                  ]
+                }
+              </>;
+            })()
+          }
+        </div>
       </div>
-      <div>
+      <div style={{ flex: 3, textAlign: "center", height: "100%", alignContent: "center" }}>
+        <div>
+          <span style={{ fontSize: 20 }}>{phaseInstructions}</span>
+        </div>
         <div>
           <table style={{ display: "inline-block", verticalAlign: "top" }}><tbody>
             <tr>
@@ -1454,7 +2844,7 @@ export default function App({ }: AppProps) {
                                   }
                                 }}
                               >
-                                {player.id === PlayerId.MCR ? "🚀" : "🛰️"}
+                                {player.id === PlayerId.MCR ? "🚀" : "🛸"}
                               </span>
                             )
                           }
@@ -1631,761 +3021,7 @@ export default function App({ }: AppProps) {
                 )
             }
           </tbody></table>
-          <div style={{ display: "inline-block", verticalAlign: "top" }}>
-            <div style={{
-              display:
-                (
-                  (
-                    gameState.phase.phase === "start"
-                    && gameState.phase.focus.hasValue
-                  )
-                  || (gameState.phase.phase === "ap turn deciding mao-kwik")
-                  || (
-                    (
-                      gameState.phase.phase === "ap turn initiative event"
-                      || gameState.phase.phase === "event turn event"
-                      || gameState.phase.phase === "score turn kept event"
-                    )
-                    && gameState.phase.focus === EventId.TheHybrid
-                    && gameState.phase.selected.hasValue
-                  )
-
-                  || (
-                    gameState.phase.phase === "start"
-                    && gameState.phase.focus.hasValue
-                    && gameState.phase.focus.value != EventId.Miller
-                    && gameState.phase.focus.value != EventId.MaoKwik
-                    && events[gameState.phase.focus.value]?.factions[gameState.phase.turn]
-                  )
-                  || (
-                    gameState.phase.phase === "ap turn initiative deciding"
-                    && gameState.phase.focus != EventId.Miller
-                    && gameState.phase.focus != EventId.MaoKwik
-                  )
-
-                  || (
-                    gameState.phase.phase === "start"
-                    && gameState.phase.focus.hasValue
-                    && gameState.board.cp[gameState.phase.turn] >= (events[gameState.phase.focus.value]?.keepCost ?? 0)
-                    && events[gameState.phase.focus.value]?.factions[gameState.phase.turn]
-                  )
-                  || (
-                    gameState.phase.phase === "ap turn initiative deciding"
-                    && gameState.board.cp[players[gameState.phase.turn].opposite] >= (events[gameState.phase.focus]?.keepCost ?? 0)
-                    && events[gameState.phase.focus]?.factions[players[gameState.phase.turn].opposite]
-                  )
-
-                  || (gameState.phase.phase === "ap turn deciding miller")
-                  || (gameState.phase.phase === "ap turn initiative deciding")
-                  || (gameState.phase.phase === "score turn kept event deciding")
-                  || (
-                    (
-                      gameState.phase.phase === "ap turn initiative event"
-                      || gameState.phase.phase === "event turn event"
-                      || gameState.phase.phase === "score turn kept event"
-                    )
-                    && (
-                      (
-                        gameState.phase.focus === EventId.Assassin
-                        && gameState.board.kept[gameState.phase.assassinAction].length == 0
-                      )
-                      || (
-                        gameState.phase.focus === EventId.CovertOp
-                        && gameState.board.influence.reduce((a, b) => [a[0] + b[0], a[1] + b[1]]).some(pInfluence => pInfluence == 0)
-                      )
-                      || (
-                        (
-                          gameState.phase.focus === EventId.BlockadeEarth
-                          || gameState.phase.focus === EventId.BlockadeMars
-                        )
-                        && gameState.phase.placing === false
-                      )
-                      || (gameState.phase.focus === EventId.BlackOps)
-                      || (
-                        gameState.phase.focus === EventId.JulieMao
-                        && (() => {
-                          if (gameState.phase.removedBase.hasValue) {
-                            const removedBase = gameState.phase.removedBase.value;
-                            return (
-                              gameState.board.influence
-                                .filter((_, base) => bases[base]?.resource === bases[removedBase]?.resource)
-                                .reduce((total, bInfluence) => total + bInfluence.reduce((a, b) => a + b), 0)
-                              == 0
-                            );
-
-                          } else {
-                            return (gameState.board.influence.reduce((total, bInfluence) => total + bInfluence.reduce((a, b) => a + b), 0) == 0);
-                          }
-                        })()
-                      )
-                      || (
-                        gameState.phase.focus === EventId.StarHelix
-                        && gameState.board.influence.every(bInfluence => bInfluence.some(i => i == 0))
-                      )
-                      || (
-                        gameState.phase.focus === EventId.RiotGear
-                        && (
-                          gameState.board.influence
-                            .filter((_, base) => orbitals[bases[base]?.orbital ?? 0]?.band == BandId.Belt)
-                            .every(bInfluence => bInfluence.every(i => i == 0))
-                        )
-                      )
-                      || (gameState.phase.focus === EventId.Ambush)
-                      || (gameState.phase.focus === EventId.HeavyBurn)
-                      || (gameState.phase.focus === EventId.AdmiralSouther)
-                    )
-                  )
-                )
-                  ? "flex"
-                  : "none"
-            }}>
-              <button
-                disabled={!(
-                  (
-                    gameState.phase.phase === "start"
-                    && gameState.phase.focus.hasValue
-                  )
-                  || (gameState.phase.phase === "ap turn deciding mao-kwik")
-                  || (
-                    (
-                      gameState.phase.phase === "ap turn initiative event"
-                      || gameState.phase.phase === "event turn event"
-                      || gameState.phase.phase === "score turn kept event"
-                    )
-                    && gameState.phase.focus === EventId.TheHybrid
-                    && gameState.phase.selected.hasValue
-                  )
-                )}
-                onClick={() => {
-                  if (
-                    gameState.phase.phase === "start"
-                    && gameState.phase.focus.hasValue
-                  ) {
-                    if (gameState.board.kept[gameState.phase.turn].some(kc => kc === EventId.MaoKwik)) {
-                      setGameState({
-                        ...gameState,
-                        phase: {
-                          ...gameState.phase,
-                          phase: "ap turn deciding mao-kwik",
-                          focus: gameState.phase.focus.value,
-                        },
-                      });
-                    } else {
-                      setGameState({
-                        ...gameState,
-                        phase: {
-                          ...gameState.phase,
-                          phase: "ap turn ap",
-                          focus: gameState.phase.focus.value,
-                          ap: events[gameState.phase.focus.value]?.ap ?? 0,
-                          selectedFleetGroup: nullopt,
-                        },
-                      });
-                    }
-
-                  } else if (
-                    gameState.phase.phase === "ap turn deciding mao-kwik"
-                  ) {
-                    setGameState({
-                      ...gameState,
-                      phase: {
-                        ...gameState.phase,
-                        phase: "ap turn ap",
-                        focus: gameState.phase.focus,
-                        ap: events[gameState.phase.focus]?.ap ?? 0,
-                        selectedFleetGroup: nullopt,
-                      },
-                    });
-
-                  } else if (
-                    (
-                      gameState.phase.phase === "ap turn initiative event"
-                      || gameState.phase.phase === "event turn event"
-                      || gameState.phase.phase === "score turn kept event"
-                    )
-                    && gameState.phase.focus === EventId.TheHybrid
-                    && gameState.phase.selected.hasValue
-                  ) {
-                    const action =
-                      gameState.phase.phase === "ap turn initiative event"
-                        ? players[gameState.phase.turn].opposite
-                        : gameState.phase.phase === "event turn event"
-                          ? gameState.phase.turn
-                          : gameState.phase.action;
-
-                    const selected = gameState.phase.selected;
-                    endEventAndSetGameState({
-                      ...gameState,
-                      board: {
-                        ...gameState.board,
-                        influence: gameState.board.influence.withMap(selected.value.base, influence => {
-                          const toRemove = events[selected.value.topEvent]?.ap;
-                          if (toRemove === undefined) throw `bad topEvent`;
-                          return map2(influence, (i, p) =>
-                            (p != action)
-                              ? i - Math.min(i, toRemove)
-                              : i - Math.min(i, toRemove - Math.min(influence[players[p].opposite], toRemove))
-                          );
-                        }),
-                      },
-                      phase: gameState.phase,  // typescript sure is silly sometimes ain't it
-                    });
-                  }
-                }}
-              >
-                Use AP
-              </button>
-              <button
-                disabled={!(
-                  (
-                    gameState.phase.phase === "start"
-                    && gameState.phase.focus.hasValue
-                    && gameState.phase.focus.value != EventId.Miller
-                    && gameState.phase.focus.value != EventId.MaoKwik
-                    && events[gameState.phase.focus.value]?.factions[gameState.phase.turn]
-                  )
-                  || (
-                    gameState.phase.phase === "ap turn initiative deciding"
-                    && gameState.phase.focus != EventId.Miller
-                    && gameState.phase.focus != EventId.MaoKwik
-                  )
-                )}
-                onClick={() => {
-                  if (
-                    gameState.phase.phase === "start"
-                    && gameState.phase.focus.hasValue
-                    && gameState.phase.focus.value != EventId.Miller
-                    && gameState.phase.focus.value != EventId.MaoKwik
-                  ) {
-                    const phase = gameState.phase;
-                    startEventAndSetGameState(
-                      {
-                        ...gameState,
-                        phase: gameState.phase,
-                      },
-                      eventPhase => ({
-                        ...phase,
-                        ...eventPhase,
-                        phase: "event turn event",
-                      }),
-                      gameState.phase.focus.value
-                    );
-                  } else if (
-                    gameState.phase.phase === "ap turn initiative deciding"
-                    && gameState.phase.focus != EventId.Miller
-                    && gameState.phase.focus != EventId.MaoKwik
-                  ) {
-                    const phase = gameState.phase;
-                    startEventAndSetGameState(
-                      {
-                        ...gameState,
-                        phase: gameState.phase,
-                      },
-                      eventPhase => ({
-                        ...phase,
-                        ...eventPhase,
-                        phase: "ap turn initiative event",
-                      }),
-                      gameState.phase.focus
-                    );
-                  }
-                }}
-              >
-                Use Event
-              </button>
-              <button
-                disabled={!(
-                  (
-                    gameState.phase.phase === "start"
-                    && gameState.phase.focus.hasValue
-                    && gameState.board.cp[gameState.phase.turn] >= (events[gameState.phase.focus.value]?.keepCost ?? 0)
-                    && events[gameState.phase.focus.value]?.factions[gameState.phase.turn]
-                  )
-                  || (
-                    gameState.phase.phase === "ap turn initiative deciding"
-                    && gameState.board.cp[players[gameState.phase.turn].opposite] >= (events[gameState.phase.focus]?.keepCost ?? 0)
-                    && events[gameState.phase.focus]?.factions[players[gameState.phase.turn].opposite]
-                  )
-                )}
-                onClick={() => {
-                  if (
-                    gameState.phase.phase === "start"
-                    && gameState.phase.focus.hasValue
-                  ) {
-                    const focus = gameState.phase.focus;
-                    drawAndSetGameState({
-                      ...gameState,
-                      board: {
-                        ...gameState.board,
-                        cp: withMap2(gameState.board.cp, gameState.phase.turn, (cp) => cp - (events[focus.value]?.keepCost ?? 0)),
-                        kept: withMap2(gameState.board.kept, gameState.phase.turn, (kept) => kept.concat(focus.value)),
-                      },
-                      phase: {
-                        ...gameState.phase,
-                        phase: "start",
-                        turn: players[gameState.phase.turn].opposite,
-                        focus: nullopt,
-                      },
-                    });
-                  } else if (
-                    gameState.phase.phase === "ap turn initiative deciding"
-                  ) {
-                    const phase = gameState.phase;
-                    const player = players[gameState.phase.turn].opposite;
-                    drawAndSetGameState({
-                      ...gameState,
-                      board: {
-                        ...gameState.board,
-                        cp: withMap2(gameState.board.cp, player, (cp) => cp - (events[phase.focus]?.keepCost ?? 0)),
-                        kept: withMap2(gameState.board.kept, player, (kept) => kept.concat(phase.focus)),
-                      },
-                      phase: {
-                        ...gameState.phase,
-                        phase: "start",
-                        turn: player,
-                        focus: nullopt,
-                      },
-                    });
-                  }
-                }}
-              >
-                Keep Event
-              </button>
-              <button
-                disabled={!(
-                  (gameState.phase.phase === "ap turn deciding miller")
-                  || (gameState.phase.phase === "ap turn initiative deciding")
-                  || (gameState.phase.phase === "score turn kept event deciding")
-                  || (
-                    (
-                      gameState.phase.phase === "ap turn initiative event"
-                      || gameState.phase.phase === "event turn event"
-                      || gameState.phase.phase === "score turn kept event"
-                    )
-                    && (
-                      (
-                        gameState.phase.focus === EventId.Assassin
-                        && gameState.board.kept[gameState.phase.assassinAction].length == 0
-                      )
-                      || (
-                        gameState.phase.focus === EventId.CovertOp
-                        && gameState.board.influence.reduce((a, b) => [a[0] + b[0], a[1] + b[1]]).some(pInfluence => pInfluence == 0)
-                      )
-                      || (
-                        (
-                          gameState.phase.focus === EventId.BlockadeEarth
-                          || gameState.phase.focus === EventId.BlockadeMars
-                        )
-                        && gameState.phase.placing === false
-                      )
-                      || (gameState.phase.focus === EventId.BlackOps)
-                      || (
-                        gameState.phase.focus === EventId.JulieMao
-                        && (() => {
-                          if (gameState.phase.removedBase.hasValue) {
-                            const removedBase = gameState.phase.removedBase.value;
-                            return (
-                              gameState.board.influence
-                                .filter((_, base) => bases[base]?.resource === bases[removedBase]?.resource)
-                                .reduce((total, bInfluence) => total + bInfluence.reduce((a, b) => a + b), 0)
-                              == 0
-                            );
-
-                          } else {
-                            return (gameState.board.influence.reduce((total, bInfluence) => total + bInfluence.reduce((a, b) => a + b), 0) == 0);
-                          }
-                        })()
-                      )
-                      || (
-                        gameState.phase.focus === EventId.StarHelix
-                        && gameState.board.influence.every(bInfluence => bInfluence.some(i => i == 0))
-                      )
-                      || (
-                        gameState.phase.focus === EventId.RiotGear
-                        && (
-                          gameState.board.influence
-                            .filter((_, base) => orbitals[bases[base]?.orbital ?? 0]?.band == BandId.Belt)
-                            .every(bInfluence => bInfluence.every(i => i == 0))
-                        )
-                      )
-                      || (gameState.phase.focus === EventId.Ambush)
-                      || (gameState.phase.focus === EventId.HeavyBurn)
-                      || (gameState.phase.focus === EventId.AdmiralSouther)
-                    )
-                  )
-                )}
-                onClick={() => {
-                  if (gameState.phase.phase === "ap turn deciding miller") {
-                    setGameState({
-                      ...gameState,
-                      phase: {
-                        ...gameState.phase,
-                        phase: "ap turn initiative deciding",
-                      },
-                    });
-
-                  } else if (gameState.phase.phase === "ap turn initiative deciding") {
-                    drawAndSetGameState({
-                      ...gameState,
-                      phase: {
-                        ...gameState.phase,
-                        phase: "start",
-                        turn: players[gameState.phase.turn].opposite,
-                        focus: nullopt,
-                      },
-                    });
-
-                  } else if (gameState.phase.phase === "score turn kept event deciding") {
-                    if (
-                      gameState.phase.action != gameState.phase.turn
-                      && gameState.board.kept[gameState.phase.turn].length > 0
-                    ) {
-                      setGameState({
-                        ...gameState,
-                        phase: {
-                          ...gameState.phase,
-                          action: gameState.phase.turn,
-                        },
-                      });
-                    } else {
-                      scoreAndSetGameState(opt(gameState.phase.bonusSector), {
-                        ...gameState,
-                        board: {
-                          ...gameState.board,
-                          bonusSectorsRemaining: withMap3(gameState.board.bonusSectorsRemaining, gameState.phase.bonusSector, r => r - 1),
-                        },
-                        phase: {
-                          ...gameState.phase,
-                          phase: "start",
-                          turn: players[gameState.phase.turn].opposite,
-                          focus: nullopt,
-                        },
-                      });
-                    }
-                  } else if (
-                    (
-                      gameState.phase.phase === "ap turn initiative event"
-                      || gameState.phase.phase === "event turn event"
-                      || gameState.phase.phase === "score turn kept event"
-                    )
-                  ) {
-                    const action =
-                      gameState.phase.phase === "ap turn initiative event"
-                        ? players[gameState.phase.turn].opposite
-                        : gameState.phase.phase === "event turn event"
-                          ? gameState.phase.turn
-                          : satisfiesCheck<"score turn kept event">(gameState.phase.phase)(gameState.phase.action);
-                    if (gameState.phase.focus === EventId.Assassin) {
-                      if (
-                        gameState.phase.assassinAction == action
-                        && gameState.board.kept[players[action].opposite].length > 0
-                      ) {
-                        setGameState({
-                          ...gameState,
-                          phase: {
-                            ...gameState.phase,
-                            assassinAction: players[action].opposite,
-                          },
-                        });
-                      } else {
-                        endEventAndSetGameState({
-                          ...gameState,
-                          phase: gameState.phase,
-                        });
-                      }
-
-                    } else {
-                      endEventAndSetGameState({
-                        ...gameState,
-                        phase: gameState.phase,
-                      });
-                    }
-                  }
-                }}
-              >
-                Pass
-              </button>
-            </div>
-            <table><tbody><tr>
-              {
-                (() => {
-                  if (
-                    gameState.phase.phase === "score turn deciding sector"
-                    || gameState.phase.phase === "score turn kept event deciding"
-                    || gameState.phase.phase === "game over"
-                  ) return undefined;
-                  const eventOpt =
-                    (gameState.phase.phase === "start")
-                      ? gameState.phase.focus
-                      : (
-                        (
-                          gameState.phase.phase === "ap turn initiative event"
-                          || gameState.phase.phase === "event turn event"
-                          || gameState.phase.phase === "score turn kept event"
-                        )
-                        && gameState.phase.focus === EventId.TheHybrid
-                        && gameState.phase.selected.hasValue
-                      )
-                        ? opt(gameState.phase.selected.value.topEvent)
-                        : opt(gameState.phase.focus);
-                  if (!eventOpt.hasValue) return undefined;
-                  const event = eventOpt.value;
-                  return (
-                    <td
-                      style={{
-                        border: "thick solid black",
-                        verticalAlign: "top",
-                      }}
-                    >
-                      {eventCardDivs[event]}
-                    </td>
-                  );
-                })()
-              }
-            </tr></tbody></table>
-          </div>
         </div>
-        <table><tbody><tr>
-          {
-            gameState.board.cardTrack.map((card, iTrack) =>
-              <td
-                key={iTrack}
-                style={{
-                  border: "thick solid black",
-                  verticalAlign: "top",
-                }}
-                onClick={() => {
-                  if (
-                    gameState.phase.phase === "start"
-                    && !gameState.phase.focus.hasValue
-                    && gameState.board.cp[gameState.phase.turn] >= (trackCost[iTrack] ?? 0)
-                  ) {
-                    const board: typeof gameState.board = {
-                      ...gameState.board,
-                      cp: withMap2(gameState.board.cp, gameState.phase.turn, (cp) => cp - (trackCost[iTrack] ?? 0)),
-                      cardTrack: gameState.board.cardTrack.slice(0, iTrack).concat(gameState.board.cardTrack.slice(iTrack + 1)),
-                    };
-                    if (card.type === CardType.Event) {
-                      setGameState({
-                        ...gameState,
-                        board,
-                        phase: {
-                          ...gameState.phase,
-                          phase: "start",
-                          focus: opt(card.event),
-                        },
-                      });
-                    } else {
-                      setGameState({
-                        ...gameState,
-                        board,
-                        phase: {
-                          ...gameState.phase,
-                          phase: "score turn deciding sector",
-                        },
-                      });
-                    }
-                  }
-                }}
-              >
-                {
-                  card.type === CardType.Score
-                    ? <div style={{ fontSize: 32, width: 200 }}>Score</div>
-                    : eventCardDivs[card.event]
-                }
-              </td>
-            )
-          }
-        </tr></tbody></table>
-        {
-          (actionPlayer === 0 ? players : players.toReversed()).map(p =>
-            <div key={p.id}>
-              <table><tbody><tr>
-                <td style={{ border: "medium solid black" }}>
-                  <div>{p.id === PlayerId.MCR ? "🎴" : "🌐"} {p.name} {p.id === PlayerId.MCR ? "🚀" : "🛰️"}</div>
-                  <div>CP: {gameState.board.cp[p.id]}</div>
-                  <div>Kept cards:</div>
-                </td>
-                {
-                  gameState.board.kept[p.id].map((event, iKept) =>
-                    <td
-                      key={event}
-                      style={{
-                        border: "thick solid black",
-                        verticalAlign: "top",
-                      }}
-                      onClick={() => {
-                        if (event == EventId.Miller) {
-                          if (
-                            gameState.phase.phase === "ap turn deciding miller"
-                            && gameState.phase.focus != EventId.Miller
-                            && gameState.phase.focus != EventId.MaoKwik
-                          ) {
-                            const phase = gameState.phase;
-                            startEventAndSetGameState(
-                              {
-                                ...gameState,
-                                phase: gameState.phase,
-                                board: {
-                                  ...gameState.board,
-                                  kept: withMap2(gameState.board.kept, p.id, kept => kept.filter(e => e != EventId.Miller)),
-                                },
-                              },
-                              eventPhase => ({
-                                ...phase,
-                                ...eventPhase,
-                                phase: "event turn event",
-                              }),
-                              gameState.phase.focus
-                            );
-                          }
-
-                        } else if (event == EventId.MaoKwik) {
-                          if (gameState.phase.phase === "ap turn deciding mao-kwik") {
-                            setGameState({
-                              ...gameState,
-                              board: {
-                                ...gameState.board,
-                                kept: withMap2(gameState.board.kept, p.id, kept => kept.filter(e => e != EventId.MaoKwik)),
-                              },
-                              phase: {
-                                ...gameState.phase,
-                                phase: "ap turn ap",
-                                ap: 4,
-                                selectedFleetGroup: nullopt,
-                              },
-                            });
-
-                          } else if (
-                            (
-                              gameState.phase.phase === "ap turn initiative event"
-                              || gameState.phase.phase === "event turn event"
-                              || gameState.phase.phase === "score turn kept event"
-                            )
-                            && gameState.phase.focus === EventId.TheHybrid
-                            && gameState.phase.selected.hasValue
-                          ) {
-                            const action =
-                              gameState.phase.phase === "ap turn initiative event"
-                                ? players[gameState.phase.turn].opposite
-                                : gameState.phase.phase === "event turn event"
-                                  ? gameState.phase.turn
-                                  : gameState.phase.action;
-
-                            const selected = gameState.phase.selected;
-                            endEventAndSetGameState({
-                              ...gameState,
-                              board: {
-                                ...gameState.board,
-                                influence: gameState.board.influence.withMap(selected.value.base, influence => {
-                                  const toRemove = events[selected.value.topEvent]?.ap;
-                                  if (toRemove === undefined) throw `bad topEvent`;
-                                  return map2(influence, (i, p) =>
-                                    (p != action)
-                                      ? i - Math.min(i, toRemove)
-                                      : i - Math.min(i, toRemove - Math.min(influence[players[p].opposite], toRemove))
-                                  );
-                                }),
-                              },
-                              phase: gameState.phase,  // typescript sure is silly sometimes ain't it
-                            });
-                          }
-
-                        } else if (
-                          gameState.phase.phase === "start"
-                          && !gameState.phase.focus.hasValue
-                          && gameState.phase.turn == p.id
-                        ) {
-                          const phase = gameState.phase;
-                          startEventAndSetGameState(
-                            {
-                              ...gameState,
-                              phase: gameState.phase,
-                              board: {
-                                ...gameState.board,
-                                kept: withMap2(gameState.board.kept, p.id, pKept => pKept.slice(0, iKept).concat(pKept.slice(iKept + 1))),
-                              },
-                            },
-                            eventPhase => ({
-                              ...phase,
-                              ...eventPhase,
-                              phase: "event turn event",
-                            }),
-                            event
-                          );
-
-                        } else if (
-                          gameState.phase.phase === "score turn kept event deciding"
-                          && gameState.phase.action === p.id
-                        ) {
-                          const phase = gameState.phase;
-                          startEventAndSetGameState(
-                            {
-                              ...gameState,
-                              phase: gameState.phase,
-                              board: {
-                                ...gameState.board,
-                                kept: withMap2(gameState.board.kept, p.id, pKept => pKept.slice(0, iKept).concat(pKept.slice(iKept + 1))),
-                              },
-                            },
-                            eventPhase => ({
-                              ...phase,
-                              ...eventPhase,
-                              phase: "score turn kept event",
-                            }),
-                            event
-                          );
-
-                        } else if (
-                          gameState.phase.phase === "ap turn initiative event"
-                          || gameState.phase.phase === "event turn event"
-                          || gameState.phase.phase === "score turn kept event"
-                        ) {
-                          const action =
-                            gameState.phase.phase === "ap turn initiative event"
-                              ? players[gameState.phase.turn].opposite
-                              : gameState.phase.phase === "event turn event"
-                                ? gameState.phase.turn
-                                : satisfiesCheck<"score turn kept event">(gameState.phase.phase)(gameState.phase.action);
-                          if (
-                            gameState.phase.focus === EventId.Assassin
-                            && gameState.phase.assassinAction === p.id
-                          ) {
-                            const board: typeof gameState.board = {
-                              ...gameState.board,
-                              kept: withMap2(gameState.board.kept, p.id, kept => kept.filter(e => e != event))
-                            }
-                            if (
-                              gameState.phase.assassinAction == action
-                              && gameState.board.kept[players[action].opposite].length > 0
-                            ) {
-                              setGameState({
-                                ...gameState,
-                                board,
-                                phase: {
-                                  ...gameState.phase,
-                                  assassinAction: players[action].opposite,
-                                },
-                              });
-                            } else {
-                              endEventAndSetGameState({
-                                ...gameState,
-                                board,
-                                phase: gameState.phase,
-                              });
-                            }
-                          }
-                        }
-                      }}
-                    >
-                      {eventCardDivs[event]}
-                    </td>
-                  )
-                }
-              </tr></tbody></table>
-            </div>
-          )
-        }
       </div>
     </div >
   );
