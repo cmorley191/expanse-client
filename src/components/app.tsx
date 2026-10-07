@@ -1108,7 +1108,7 @@ export default function App({ }: AppProps) {
         ) return;
 
         if (gameState.phase.placing) {
-          setGameState({
+          (((gameState.board.fleets[bases[base]?.orbital]?.[action] ?? 0) > (gameState.board.fleets[bases[base]?.orbital]?.[players[action].opposite] ?? 0)) ? setGameState : endEventAndSetGameState)({
             ...gameState,
             board: {
               ...gameState.board,
@@ -1748,14 +1748,7 @@ export default function App({ }: AppProps) {
                                   gameState.phase.focus === EventId.StarHelix
                                   && gameState.board.influence.every(bInfluence => bInfluence.some(i => i == 0))
                                 )
-                                || (
-                                  gameState.phase.focus === EventId.RiotGear
-                                  && (
-                                    gameState.board.influence
-                                      .filter((_, base) => orbitals[bases[base]?.orbital ?? 0]?.band == BandId.Belt)
-                                      .every(bInfluence => bInfluence.every(i => i == 0))
-                                  )
-                                )
+                                || (gameState.phase.focus === EventId.RiotGear)
                                 || (gameState.phase.focus === EventId.Ambush)
                                 || (gameState.phase.focus === EventId.HeavyBurn)
                                 || (gameState.phase.focus === EventId.AdmiralSouther)
@@ -2060,14 +2053,7 @@ export default function App({ }: AppProps) {
                                   gameState.phase.focus === EventId.StarHelix
                                   && gameState.board.influence.every(bInfluence => bInfluence.some(i => i == 0))
                                 )
-                                || (
-                                  gameState.phase.focus === EventId.RiotGear
-                                  && (
-                                    gameState.board.influence
-                                      .filter((_, base) => orbitals[bases[base]?.orbital ?? 0]?.band == BandId.Belt)
-                                      .every(bInfluence => bInfluence.every(i => i == 0))
-                                  )
-                                )
+                                || (gameState.phase.focus === EventId.RiotGear)
                                 || (gameState.phase.focus === EventId.Ambush)
                                 || (gameState.phase.focus === EventId.HeavyBurn)
                                 || (gameState.phase.focus === EventId.AdmiralSouther)
@@ -2986,6 +2972,17 @@ export default function App({ }: AppProps) {
                                                           ),
                                                           player.id,
                                                           i => i + 1
+                                                        )
+                                                      )
+                                                      .withMap(base.id, influence =>
+                                                        withMap2(
+                                                          withMap2(
+                                                            influence,
+                                                            selectedInfluence.value.player,
+                                                            i => i + 1
+                                                          ),
+                                                          player.id,
+                                                          i => i - 1
                                                         )
                                                       ),
                                                 },
