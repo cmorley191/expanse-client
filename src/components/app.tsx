@@ -3,7 +3,8 @@ import "../core/array_extensions";
 import * as React from "react";
 import { motion, Transition } from "motion/react";
 
-import { BandId, bands, BaseId, bases, bonusSectorBonusPoints, Card, CardType, EventId, EventIdKeepOnly, events, FLEET_COUNT, GameState, GameStateAPPhase, GameStateEventPhase, GameStatePhase, GameStatePhaseEventPhase, NONSCORES_PER_PILE, OrbitalId, orbitals, PILES, PlayerId, players, ResourceId, resources, SCORES_PER_PILE, SectorId, sectors, TRACK_COUNT, trackCost } from "../game/game_types";
+import { BandId, bands, BaseId, bases, bonusSectorBonusPoints, Card, CardType, EventId, events, FLEET_COUNT, NONSCORES_PER_PILE, OrbitalId, orbitals, PILES, PlayerId, players, ResourceId, resources, SCORES_PER_PILE, SectorId, sectors, TRACK_COUNT, trackCost } from "../game/parameters";
+import { EventIdKeepOnly, GameState, GameStateAPPhase, GameStateEventPhase, GameStatePhase, GameStatePhaseEventPhase } from "../game/state";
 import { assertType, getRandomInt, lerp, map2, satisfiesCheck, with2, withMap2, withMap3 } from "../core/misc";
 import { nullopt, opt, Optional, optMap } from "../core/optional";
 
