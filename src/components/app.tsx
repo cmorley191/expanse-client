@@ -2162,7 +2162,7 @@ export default function App({ }: AppProps) {
                       </div>
                     </motion.div>,
 
-                    <motion.div // scores
+                    <motion.div // players
                       key="scores"
                       layout="position"
                       layoutId="scores"
@@ -2221,18 +2221,40 @@ export default function App({ }: AppProps) {
                                       maskImage: "",
                                     }
                                     : (
-                                      gameState.phase.phase === "game over"
-                                      || gameState.phase.turn != player.id
+                                      (
+                                        (
+                                          (
+                                            gameState.phase.phase === "start"
+                                            && gameState.phase.focus.hasValue === false
+                                          )
+                                          || gameState.phase.phase === "ap turn deciding mao-kwik"
+                                          || gameState.phase.phase === "ap turn deciding miller"
+                                        )
+                                        && gameState.phase.turn === player.id
+                                      )
+                                      || (
+                                        gameState.phase.phase === "score turn kept event deciding"
+                                        && gameState.phase.action === player.id
+                                      )
+                                      || (
+                                        (
+                                          gameState.phase.phase === "ap turn initiative event"
+                                          || gameState.phase.phase === "event turn event"
+                                          || gameState.phase.phase === "score turn kept event"
+                                        )
+                                        && gameState.phase.focus === EventId.Assassin
+                                        && gameState.phase.assassinAction === player.id
+                                      )
                                     )
                                       ? {
-                                        maxHeight: `calc(${trackHeight} * 0.25)`,
-                                        marginBottom: 0,
-                                        maskImage: "linear-gradient(to bottom, black 0%, transparent 100%)",
-                                      }
-                                      : {
                                         maxHeight: `calc(${trackHeight} * 1.25)`,
                                         marginBottom: "1dvw",
                                         maskImage: "linear-gradient(to bottom, black 80%, transparent 100%)",
+                                      }
+                                      : {
+                                        maxHeight: `calc(${trackHeight} * 0.25)`,
+                                        marginBottom: 0,
+                                        maskImage: "linear-gradient(to bottom, black 0%, transparent 100%)",
                                       }
                                 ),
                                 gridArea: "keptList",
