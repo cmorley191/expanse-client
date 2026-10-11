@@ -1,5 +1,7 @@
 import { nullopt, nullopt_, opt, Optional, optValueOr, throwOnNullopt } from "./optional";
 
+export function identity<T>(x: T): T { return x; }
+
 /**
  * Does nothing / passthrough at runtime. Causes a compile error (assuming strict mode) if the passed in value is not of the specified type.
  *
@@ -225,6 +227,7 @@ export function takeZipAll<T>(...arrs: T[][]): T[][] {
   const minLength = Math.min(...arrs.map(arr => arr.length));
   return Array(minLength).fill(false).map((_, i) => arrs.map(arr => throwOnNullopt(arr.get(i), "takeZipAll limited index impossibility")));
 }
+
 /**
  * Like zip, but accepts an arbitrary number of arrays to zip together.
  */
