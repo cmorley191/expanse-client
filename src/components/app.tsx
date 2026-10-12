@@ -3,45 +3,16 @@ import "../core/array_extensions";
 import * as React from "react";
 import { motion, Transition } from "motion/react";
 
-import { bands, BaseId, bases, Card, CardType, EventId, events, NONSCORES_PER_PILE, orbitals, PILES, PlayerId, players, SCORES_PER_PILE, SectorId, sectors, TRACK_COUNT } from "../game/parameters";
-import { GameState, getContinuation } from "../game/state";
+import { bands, BaseId, bases, Card, CardType, EventId, events, NONSCORES_PER_PILE, orbitals, PILES, PlayerId, players, SCORES_PER_PILE, sectors, TRACK_COUNT } from "../game/parameters";
+import { GameState, GameStateContinuation, getContinuations, TurnHistoryItem } from "../game/state";
 import { getRandomInt, lerp, map2, satisfiesCheck } from "../core/misc";
 import { nullopt, opt, Optional, optMap, throwOnNullopt } from "../core/optional";
 
 
 type AppProps = {};
 
-type History =
-  & { turn: PlayerId, card: Card }
-  & (
-    | {
-      type: "play kept",
-      card: Card & { type: CardType.Event },
-    }
-    | (
-      //& { iTrack: number }
-      & (
-        | {
-          type: "track ap",
-          card: Card & { type: CardType.Event },
-          eventUse: "self miller" | "initiative keep" | "initiative use" | "pass"
-        }
-        | {
-          type: "track event" | "keep track",
-          card: Card & { type: CardType.Event },
-        }
-        | {
-          type: "score"
-          card: Card & { type: CardType.Score },
-          bonusSector: SectorId,
-          events: [Optional<EventId>, Optional<EventId>],
-        }
-      )
-    )
-  );
-
 export default function App({ }: AppProps) {
-  const [gameState, setGameState] = React.useState<GameState>(() => {
+  const [gameState, setGameStateRaw] = React.useState<GameState>(() => {
     let deck =
       Array(events.length).fill(false)
         .map((_, i): Card => ({ type: CardType.Event, event: i as EventId }))
@@ -100,10 +71,14 @@ export default function App({ }: AppProps) {
     };
   });
 
-  const continuation = getContinuation(gameState);
+  const continuations = getContinuations(gameState);
 
-  const [history, _setHistory] = React.useState<History[]>([]);
-  const [_completedHistoryLength, _setCompletedHistoryLength] = React.useState(0);
+  const [turnHistory, setTurnHistory] = React.useState<TurnHistoryItem[]>([]);
+
+  function setGameState(continuation: GameStateContinuation) {
+    setTurnHistory(turnHistory.concat(continuation.turnsComplete));
+    setGameStateRaw(continuation.state);
+  }
 
   const eventCardDivs = events.map(event =>
     <div style={{ position: "relative", textAlign: "center", padding: "0.1dvw" }}>
@@ -201,17 +176,17 @@ export default function App({ }: AppProps) {
             (() => {
               const maxHistoryLength = (NONSCORES_PER_PILE + SCORES_PER_PILE) * PILES;
               const maxHistoryFlex = 0.4;
-              const totalHistoryFlex = lerp(0, maxHistoryFlex, Math.pow(history.length / maxHistoryLength, 0.8));
+              const totalHistoryFlex = lerp(0, maxHistoryFlex, Math.pow(turnHistory.length / maxHistoryLength, 0.8));
               const historyFlexes = (() => {
-                if (history.length === 0) return [];
-                const unnormalized = history.map((_, iHistory) =>
+                if (turnHistory.length === 0) return [];
+                const unnormalized = turnHistory.map((_, iHistory) =>
                   Math.pow(
-                    1 - ((history.length - iHistory) / maxHistoryLength),
-                    lerp(1, 3, Math.pow(history.length / maxHistoryLength, 0.2))
+                    1 - ((turnHistory.length - iHistory) / maxHistoryLength),
+                    lerp(1, 3, Math.pow(turnHistory.length / maxHistoryLength, 0.2))
                   ));
                 const totalUnnormalized = unnormalized.reduce((a, b) => a + b);
                 const minPerHistory = 0.7 / maxHistoryLength;
-                return unnormalized.map(x => minPerHistory + x * totalHistoryFlex / Math.max(0.01, totalUnnormalized - minPerHistory * history.length));
+                return unnormalized.map(x => minPerHistory + x * totalHistoryFlex / Math.max(0.01, totalUnnormalized - minPerHistory * turnHistory.length));
               })();
               //const minHistoryMargin = "0.2dvh";
               const transitionTime = "0.4s";
@@ -236,7 +211,7 @@ export default function App({ }: AppProps) {
                 />
                 {
                   [
-                    ...history.map((historyItem, iHistory) => {
+                    ...turnHistory.map((historyItem, iHistory) => {
                       const key = (() => {
                         if (historyItem.card.type === CardType.Score) return `score ${iHistory}`;
                         if (historyItem.type === "play kept") return `kept ${iHistory}`;
@@ -247,6 +222,7 @@ export default function App({ }: AppProps) {
                         layout="position"
                         layoutId={key}
                         transition={motionTransition}
+                        id={key}
                         style={{
                           width: "100%",
                           height: `${(historyFlexes[iHistory] ?? 0) * (totalHistoryFlex / historyFlexes.reduce((a, b) => a + b)) * 100}%`,
@@ -340,9 +316,9 @@ export default function App({ }: AppProps) {
                       if (focus.hasValue === false) return [];
 
                       const key = (() => {
-                        if (focus.value.type === CardType.Score) return `score ${history.length}`;
+                        if (focus.value.type === CardType.Score) return `score ${turnHistory.length}`;
                         const focusValue = focus.value;
-                        if (history.some(h => h.card.type === CardType.Event && h.card.event === focusValue.event)) return `kept ${history.length}`;
+                        if (turnHistory.some(h => h.card.type === CardType.Event && h.card.event === focusValue.event)) return `kept ${turnHistory.length}`;
                         return `event ${focus.value.event}`;
                       })();
 
@@ -351,6 +327,7 @@ export default function App({ }: AppProps) {
                         layout="position"
                         layoutId={key}
                         transition={motionTransition}
+                        id={key}
                         style={{
                           width: "100%",
                           height: "0dvh",
@@ -516,7 +493,7 @@ export default function App({ }: AppProps) {
                               transition={motionTransition}
                             >
                               {
-                                new Date(new Date().getFullYear() + 300, 0, 1 + (history.length / maxHistoryLength) * 366)
+                                new Date(new Date().getFullYear() + 300, 0, 1 + (turnHistory.length / maxHistoryLength) * 366)
                                   .toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
                               }
                             </motion.div>
@@ -539,28 +516,28 @@ export default function App({ }: AppProps) {
                         margin: "1dvw",
                         display:
                           (
-                            continuation.actions.clickUseAP.hasValue
-                            || continuation.actions.clickUseEvent.hasValue
-                            || continuation.actions.clickKeepEvent.hasValue
-                            || continuation.actions.clickPass.hasValue
+                            continuations.actions.clickUseAP.hasValue
+                            || continuations.actions.clickUseEvent.hasValue
+                            || continuations.actions.clickKeepEvent.hasValue
+                            || continuations.actions.clickPass.hasValue
                           )
                             ? "flex"
                             : "none"
                       }}>
                         {
                           [
-                            { text: "Use AP", continuation: continuation.actions.clickUseAP },
-                            { text: "Use Event", continuation: continuation.actions.clickUseEvent },
-                            { text: "Keep Event", continuation: continuation.actions.clickKeepEvent },
-                            { text: "Pass", continuation: continuation.actions.clickPass },
+                            { text: "Use AP", continuations: continuations.actions.clickUseAP },
+                            { text: "Use Event", continuations: continuations.actions.clickUseEvent },
+                            { text: "Keep Event", continuations: continuations.actions.clickKeepEvent },
+                            { text: "Pass", continuations: continuations.actions.clickPass },
                           ]
                             .map(b =>
                               <button
                                 key={b.text}
-                                disabled={b.continuation.hasValue === false}
+                                disabled={b.continuations.hasValue === false}
                                 onClick={() => {
-                                  if (b.continuation.hasValue) {
-                                    setGameState(b.continuation.value);
+                                  if (b.continuations.hasValue) {
+                                    setGameState(b.continuations.value);
                                   }
                                 }}
                               >
@@ -628,7 +605,7 @@ export default function App({ }: AppProps) {
                                       marginBottom: 0,
                                       maskImage: "",
                                     }
-                                    : (continuation.actions.clickKeptCard[player.id]?.some(c => c.hasValue) === true)
+                                    : (continuations.actions.clickKeptCard[player.id]?.some(c => c.hasValue) === true)
                                       ? {
                                         maxHeight: `calc(${trackHeight} * 1.25)`,
                                         marginBottom: "1dvw",
@@ -642,13 +619,14 @@ export default function App({ }: AppProps) {
                                 ),
                                 gridArea: "keptList",
                                 overflowY:
-                                  (continuation.actions.clickKeptCard[player.id]?.some(c => c.hasValue) === true) ? "scroll" : "clip",
+                                  (continuations.actions.clickKeptCard[player.id]?.some(c => c.hasValue) === true) ? "scroll" : "clip",
                               }}>
                               {
                                 gameState.board.kept[player.id]
-                                  .takeZip((continuation.actions.clickKeptCard[player.id] ?? []).padRight({ toLength: gameState.board.kept[player.id].length, getPadElement: () => nullopt }))
-                                  .map(([event, continuation]) =>
+                                  .takeZip((continuations.actions.clickKeptCard[player.id] ?? []).padRight({ toLength: gameState.board.kept[player.id].length, getPadElement: () => nullopt }))
+                                  .map(([event, continuations]) =>
                                     <div  // kept card
+                                      key={event}
                                       style={{
                                         width: "100%",
                                         marginBottom: "1dvw",
@@ -663,8 +641,8 @@ export default function App({ }: AppProps) {
                                           border: "0.3dvw solid black",
                                         }}
                                         onClick={() => {
-                                          if (continuation.hasValue) {
-                                            setGameState(continuation.value);
+                                          if (continuations.hasValue) {
+                                            setGameState(continuations.value);
                                           }
                                         }}
                                       >
@@ -679,8 +657,8 @@ export default function App({ }: AppProps) {
                     </motion.div>,
 
                     ...gameState.board.cardTrack
-                      .takeZip(continuation.actions.clickTrackCard)
-                      .map(([card, continuation], iTrack) => {
+                      .takeZip(continuations.actions.clickTrackCard)
+                      .map(([card, continuations], iTrack) => {
                         const side =
                           (
                             (
@@ -693,11 +671,14 @@ export default function App({ }: AppProps) {
                             ? "left"
                             : "right";
 
+                        const key = card.type === CardType.Score ? `score track ${iTrack}` : `event ${card.event}`
+
                         return <motion.div  // track card
-                          key={card.type === CardType.Score ? `score track ${iTrack}` : `event ${card.event}`}
+                          key={key}
                           layout="position"
-                          layoutId={card.type === CardType.Score ? `score track ${iTrack}` : `event ${card.event}`}
+                          layoutId={key}
                           transition={motionTransition}
+                          id={key}
                           style={{
                             width: "100%",
                             marginTop: iTrack === 0 ? `calc(1dvw + ${trackHeight} / 2)` : "1dvw",
@@ -744,8 +725,8 @@ export default function App({ }: AppProps) {
                                 border: "0.3dvw solid black",
                               }}
                               onClick={() => {
-                                if (continuation.hasValue) {
-                                  setGameState(continuation.value);
+                                if (continuations.hasValue) {
+                                  setGameState(continuations.value);
                                 }
                               }}
                             >
@@ -786,20 +767,20 @@ export default function App({ }: AppProps) {
       </div>
       <div style={{ flex: 3, textAlign: "center", height: "100%", alignContent: "center" }}>
         <div>
-          <span style={{ fontSize: 20 }}>{continuation.instructions}</span>
+          <span style={{ fontSize: 20 }}>{continuations.instructions}</span>
         </div>
         <div>
           <table style={{ display: "inline-block", verticalAlign: "top" }}><tbody>
             <tr>
               {
-                throwOnNullopt(sectors.zip(continuation.actions.clickSector), "bad continuation").map(([s, continuation]) =>
+                throwOnNullopt(sectors.zip(continuations.actions.clickSector), "bad continuations").map(([s, continuations]) =>
                   <td
                     key={s.id}
                     style={{ fontSize: 32, border: "thick solid gray" }}
                     colSpan={orbitals.filter(o => bands[o.band]?.sector == s.id).length}
                     onClick={() => {
-                      if (continuation.hasValue) {
-                        setGameState(continuation.value);
+                      if (continuations.hasValue) {
+                        setGameState(continuations.value);
                       }
                     }}
                   >
@@ -810,13 +791,13 @@ export default function App({ }: AppProps) {
             </tr>
             <tr>
               {
-                throwOnNullopt(orbitals.zip(continuation.actions.clickOrbital), "bad continuation").map(([o, continuation]) =>
+                throwOnNullopt(orbitals.zip(continuations.actions.clickOrbital), "bad continuations").map(([o, continuations]) =>
                   <td
                     key={o.id}
                     style={{ fontSize: 24, border: "thick solid gray" }}
                     onClick={() => {
-                      if (continuation.hasValue) {
-                        setGameState(continuation.value);
+                      if (continuations.hasValue) {
+                        setGameState(continuations.value);
                       }
                     }}
                   >
@@ -828,9 +809,9 @@ export default function App({ }: AppProps) {
             <tr>
               {
                 gameState.board.fleets
-                  .takeZip(continuation.actions.clickOrbital)
-                  .takeZip(continuation.actions.clickFleet)
-                  .map(([[oFleets, orbitalContinuation], orbitalFleetContinuation], orbital) =>
+                  .takeZip(continuations.actions.clickOrbital)
+                  .takeZip(continuations.actions.clickFleet)
+                  .map(([[oFleets, orbitalContinuations], orbitalFleetContinuations], orbital) =>
                     <td
                       key={orbital}
                       style={{
@@ -842,17 +823,17 @@ export default function App({ }: AppProps) {
                               : "2px dotted gray",
                       }}
                       onClick={() => {
-                        if (orbitalContinuation.hasValue) {
-                          setGameState(orbitalContinuation.value);
+                        if (orbitalContinuations.hasValue) {
+                          setGameState(orbitalContinuations.value);
                         }
                       }}
                     >
                       {
-                        players.takeZip(continuation.actions.clickBuildFleet).map(([player, buildContinuation]) =>
+                        players.takeZip(continuations.actions.clickBuildFleet).map(([player, buildContinuations]) =>
                           <span key={player.id}>
                             {
-                              (orbitalFleetContinuation[player.id] ?? []).padRight({ toLength: oFleets[player.id], getPadElement: () => nullopt })
-                                .map((fleetContinuation, iFleet) =>
+                              (orbitalFleetContinuations[player.id] ?? []).padRight({ toLength: oFleets[player.id], getPadElement: () => nullopt })
+                                .map((fleetContinuations, iFleet) =>
                                   <span
                                     key={iFleet}
                                     style={(() => {
@@ -918,8 +899,8 @@ export default function App({ }: AppProps) {
                                       return undefined;
                                     })()}
                                     onClick={() => {
-                                      if (fleetContinuation.hasValue) {
-                                        setGameState(fleetContinuation.value);
+                                      if (fleetContinuations.hasValue) {
+                                        setGameState(fleetContinuations.value);
                                       }
                                     }}
                                   >
@@ -930,10 +911,10 @@ export default function App({ }: AppProps) {
                             {
                               player.homeOrbital == orbital
                                 ? <button
-                                  style={{ display: buildContinuation.hasValue ? "inline" : "none" }}
+                                  style={{ display: buildContinuations.hasValue ? "inline" : "none" }}
                                   onClick={() => {
-                                    if (buildContinuation.hasValue) {
-                                      setGameState(buildContinuation.value);
+                                    if (buildContinuations.hasValue) {
+                                      setGameState(buildContinuations.value);
                                     }
                                   }}
                                 >
@@ -965,14 +946,14 @@ export default function App({ }: AppProps) {
                       row.map((b, iCol) => {
                         if (!b.hasValue) return <td key={iCol} />;
                         const base = bases[b.value];
-                        const baseContinuation = continuation.actions.clickBase[b.value];
-                        const baseInfluenceContinuation = continuation.actions.clickInfluence[b.value];
+                        const baseContinuations = continuations.actions.clickBase[b.value];
+                        const baseInfluenceContinuations = continuations.actions.clickInfluence[b.value];
                         const fleets = gameState.board.fleets[base?.orbital ?? 0];
                         const influence = gameState.board.influence[b.value];
                         if (
                           base === undefined
-                          || baseContinuation === undefined
-                          || baseInfluenceContinuation === undefined
+                          || baseContinuations === undefined
+                          || baseInfluenceContinuations === undefined
                           || fleets === undefined
                           || influence === undefined
                         ) return <td key={iCol} />;
@@ -992,8 +973,8 @@ export default function App({ }: AppProps) {
                             verticalAlign: "top",
                           }}
                           onClick={() => {
-                            if (baseContinuation.hasValue) {
-                              setGameState(baseContinuation.value);
+                            if (baseContinuations.hasValue) {
+                              setGameState(baseContinuations.value);
                             }
                           }}
                         >
@@ -1003,8 +984,8 @@ export default function App({ }: AppProps) {
                               players.map(player =>
                                 <span key={player.id}>
                                   {
-                                    (baseInfluenceContinuation[player.id] ?? []).padRight({ toLength: influence[player.id], getPadElement: () => nullopt })
-                                      .map((influenceContinuation, iInfluence) =>
+                                    (baseInfluenceContinuations[player.id] ?? []).padRight({ toLength: influence[player.id], getPadElement: () => nullopt })
+                                      .map((influenceContinuations, iInfluence) =>
                                         <span
                                           key={iInfluence}
                                           style={(() => {
@@ -1025,8 +1006,8 @@ export default function App({ }: AppProps) {
                                             return undefined;
                                           })()}
                                           onClick={() => {
-                                            if (influenceContinuation.hasValue) {
-                                              setGameState(influenceContinuation.value);
+                                            if (influenceContinuations.hasValue) {
+                                              setGameState(influenceContinuations.value);
                                             }
                                           }}
                                         >

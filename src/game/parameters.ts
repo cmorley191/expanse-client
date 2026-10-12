@@ -296,7 +296,7 @@ export const events: Event[] = [
     title: "Deimos Destroyed",
     subtitle: nullopt,
     text: "Must remove 1 influence from each Mars base. Place 1 influence on an Earth base.",
-    shortText: "Remove 1 Mars influence, add 1 Earth influence.",
+    shortText: "Remove 1 influence from each Mars, add 1 Earth.",
     ap: 4,
     keepCost: 1,
     factions: [false, true],
