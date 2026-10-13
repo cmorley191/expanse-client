@@ -252,7 +252,12 @@ function Game({ model }: GameProps) {
 
   return (
     <div style={{ display: "flex", width: "100%", height: "100%", userSelect: "none", cursor: "default" }}>
-      <div style={{ flex: 1, width: "100%", height: "100%", position: "relative" }}>
+      <style>{`
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
+      <div style={{ width: "50dvmin", height: "100%", position: "relative" }}>
         <div // line
           style={{
             width: "0.1dvw",
@@ -271,12 +276,16 @@ function Game({ model }: GameProps) {
             zIndex: 1,
           }}
         />
-        <div style={{ // timeline content
-          width: "100%",
-          height: "100%",
-          boxSizing: "border-box",
-          position: "relative",
-        }}>
+        <div // timeline content
+          className="no-scrollbar"
+          style={{
+            width: "100%",
+            height: "100%",
+            boxSizing: "border-box",
+            position: "relative",
+            overflowY: "auto",
+            maskImage: "linear-gradient(to bottom, black 95%, transparent 100%)",
+          }}>
           {
             (() => {
               const maxHistoryLength = (NONSCORES_PER_PILE + SCORES_PER_PILE) * PILES;
@@ -697,11 +706,6 @@ function Game({ model }: GameProps) {
                               if (kept == 0) return "";
                               return `${kept} kept ${kept == 1 ? "card" : "cards"}`;
                             })()}</span>
-                            <style>{`
-                              .no-scrollbar::-webkit-scrollbar {
-                                display: none;
-                              }
-                            `}</style>
                             <div
                               className="no-scrollbar"
                               style={{
@@ -898,7 +902,7 @@ function Game({ model }: GameProps) {
           }
         </div>
       </div>
-      <div style={{ flex: 3, textAlign: "center", height: "100%", alignContent: "center" }}>
+      <div style={{ flexGrow: 1, textAlign: "center", height: "100%", alignContent: "center" }}>
         <div>
           <span style={{ fontSize: 20 }}>{continuations.instructions}</span>
           {
@@ -951,7 +955,7 @@ function Game({ model }: GameProps) {
                         player: continuationsDecision.value.player,
                         continuation
                       })))
-                      : sectors.map(() => nullopt),
+                      : orbitals.map(() => nullopt),
                   ),
                   "bad continuations"
                 ).map(([o, decision]) =>
