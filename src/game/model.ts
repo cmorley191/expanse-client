@@ -551,6 +551,7 @@ export class ExpanseModel_Centauri {
   */
 
   public static async initialize() {
+    ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@dev/dist/';
     const session = await ort.InferenceSession.create(
       ExpanseModel_Centauri.weightsPath,
       { executionProviders: ['webgpu', 'wasm'] }

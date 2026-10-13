@@ -36,14 +36,6 @@ module.exports = {
     new CopyWebpackPlugin({
       patterns: [
         { from: 'assets', to: path.resolve(__dirname, 'dist/assets') },
-        {
-          from: path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs'),
-          to: 'ort-wasm-simd-threaded.jsep.mjs',
-        },
-        {
-          from: path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm'),
-          to: 'ort-wasm-simd-threaded.jsep.wasm',
-        },
       ],
     }),
   ],
