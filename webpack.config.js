@@ -1,5 +1,7 @@
 const path = require('path');
+const webpack = require('webpack');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = {
   entry: {
@@ -30,6 +32,19 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: './src/index.html',
       inject: 'body',
+    }),
+    new CopyWebpackPlugin({
+      patterns: [
+        { from: 'assets', to: path.resolve(__dirname, 'dist/assets') },
+        {
+          from: path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs'),
+          to: 'ort-wasm-simd-threaded.jsep.mjs',
+        },
+        {
+          from: path.resolve(__dirname, 'node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm'),
+          to: 'ort-wasm-simd-threaded.jsep.wasm',
+        },
+      ],
     }),
   ],
 };

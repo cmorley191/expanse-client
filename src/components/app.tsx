@@ -4,14 +4,61 @@ import * as React from "react";
 import { motion, Transition } from "motion/react";
 
 import { bands, BaseId, bases, Card, CardType, EventId, events, NONSCORES_PER_PILE, orbitals, PILES, PlayerId, players, SCORES_PER_PILE, sectors, TRACK_COUNT } from "../game/parameters";
-import { GameState, GameStateContinuation, getContinuations, TurnHistoryItem } from "../game/state";
-import { getRandomInt, lerp, map2, satisfiesCheck } from "../core/misc";
+import { GameState, GameStateContinuation, GameStateContinuations, TurnHistoryItem } from "../game/state";
+import { getRandomInt, lerp, map2, satisfiesCheck, tuple2 } from "../core/misc";
 import { nullopt, opt, Optional, optMap, throwOnNullopt } from "../core/optional";
+import { ExpanseModel_Centauri, getStateContinuationsInputs } from "../game/model";
+import AnimatedEllipses from "./elements/animated_ellipses";
 
 
 type AppProps = {};
 
 export default function App({ }: AppProps) {
+  const [model, setModel] = React.useState<
+    | { state: "loading" }
+    | { state: "error", error: any }
+    | { state: "loaded", model: ExpanseModel_Centauri }
+  >({ state: "loading" });
+
+  React.useEffect(() => {
+    ExpanseModel_Centauri.initialize()
+      .then(
+        newModel => setModel({ state: "loaded", model: newModel }),
+        error => setModel({ state: "error", error })
+      );
+  }, []);
+
+  return (
+    model.state === "loaded"
+      ? <Game model={model.model} />
+      : <div style={{
+        position: "absolute",
+        left: "50%",
+        top: "50%",
+        transform: "translate(-50%, -50%)",
+        textAlign: "center",
+      }}>
+        {
+          model.state === "loading"
+            ? <div style={{ fontSize: "4dvh", marginBottom: "2dvh" }}>Initializing AI model...</div>
+            : <>
+              <div style={{ fontSize: "4dvh", marginBottom: "2dvh" }}>Failed to load model!</div>
+              <div style={{ fontSize: "1.5dvh" }}>{model.error.toString()}</div>
+            </>
+        }
+        <div style={{ fontSize: "1dvh" }}>{ExpanseModel_Centauri.weightsPath}</div>
+      </div>
+  );
+}
+
+
+type GameProps = {
+  model: ExpanseModel_Centauri
+};
+
+function Game({ model }: GameProps) {
+  const modelPlayer = React.useMemo<PlayerId>(() => getRandomInt(players.length), []);
+
   const [gameState, setGameStateRaw] = React.useState<GameState>(() => {
     let deck =
       Array(events.length).fill(false)
@@ -71,7 +118,17 @@ export default function App({ }: AppProps) {
     };
   });
 
-  const continuations = getContinuations(gameState);
+  const [modelChoice, setModelChoice] = React.useState<Optional<{
+    trace: {
+      choice: GameStateContinuation,
+      continuations: GameStateContinuations,
+    }[],
+    final: { choice: GameStateContinuation },
+  }>>(nullopt);
+
+  const continuationsInputs = getStateContinuationsInputs(gameState);
+  const continuations = continuationsInputs.rootContinuations;
+  const continuationsDecision = continuations.decision;
 
   const [turnHistory, setTurnHistory] = React.useState<TurnHistoryItem[]>([]);
 
@@ -79,6 +136,54 @@ export default function App({ }: AppProps) {
     setTurnHistory(turnHistory.concat(continuation.turnsComplete));
     setGameStateRaw(continuation.state);
   }
+
+  React.useEffect(() => {
+    if (modelChoice.hasValue) {
+      const timeout = setTimeout(() => {
+        const traceHead = modelChoice.value.trace.get(0);
+        if (traceHead.hasValue) {
+          setGameState(traceHead.value.choice);
+          setModelChoice(opt({
+            ...modelChoice.value,
+            trace: modelChoice.value.trace.slice(1),
+          }));
+        } else {
+          setGameState(modelChoice.value.final.choice);
+          setModelChoice(nullopt);
+        }
+      }, 4000 + getRandomInt(2000));
+      return () => { clearTimeout(timeout); };
+    }
+
+    if (
+      continuations.decision.hasValue === false
+      || continuations.decision.value.player != modelPlayer
+    ) return () => { };
+
+    const choices = continuationsInputs.choices.filterTransform(choice =>
+      choice.final.hasValue
+        ? opt({
+          ...choice,
+          final: choice.final.value
+        })
+        : nullopt
+    );
+    if (choices.length != continuationsInputs.choices.length) throw `untraceable continuation`;
+
+    model.inferModelStateValues(choices.map(c => c.final.input))
+      .then(values => {
+        const bestValue =
+          modelPlayer === 0
+            ? Math.max(...values)
+            : Math.min(...values);
+        const choice = values.takeZip(choices).filterTransform(([v, choice]) => v == bestValue ? opt(choice) : nullopt).get(0);
+        if (choice.hasValue === false) throw `no choice`;
+        setModelChoice(choice);
+      })
+
+    return () => { };
+
+  }, [gameState, modelChoice]);
 
   const eventCardDivs = events.map(event =>
     <div style={{ position: "relative", textAlign: "center", padding: "0.1dvw" }}>
@@ -294,7 +399,7 @@ export default function App({ }: AppProps) {
                             }} />
                             {
                               historyItem.card.type === CardType.Score
-                                ? <div style={{ fontSize: 32, width: 200 }}>Score</div>
+                                ? <div style={{ fontSize: 32, width: 200 }}>Score (30)</div>
                                 : eventCardDivs[historyItem.card.event]
                             }
                           </div>
@@ -397,7 +502,7 @@ export default function App({ }: AppProps) {
                             }} />
                             {
                               focus.value.type === CardType.Score
-                                ? <div style={{ fontSize: 32, width: 200 }}>Score</div>
+                                ? <div style={{ fontSize: 32, width: 200 }}>Score (30)</div>
                                 : eventCardDivs[focus.value.event]
                             }
                           </div>
@@ -516,28 +621,31 @@ export default function App({ }: AppProps) {
                         margin: "1dvw",
                         display:
                           (
-                            continuations.actions.clickUseAP.hasValue
-                            || continuations.actions.clickUseEvent.hasValue
-                            || continuations.actions.clickKeepEvent.hasValue
-                            || continuations.actions.clickPass.hasValue
+                            continuations.decision.hasValue
+                            && (
+                              continuations.decision.value.actions.clickUseAP.hasValue
+                              || continuations.decision.value.actions.clickUseEvent.hasValue
+                              || continuations.decision.value.actions.clickKeepEvent.hasValue
+                              || continuations.decision.value.actions.clickPass.hasValue
+                            )
                           )
                             ? "flex"
                             : "none"
                       }}>
                         {
                           [
-                            { text: "Use AP", continuations: continuations.actions.clickUseAP },
-                            { text: "Use Event", continuations: continuations.actions.clickUseEvent },
-                            { text: "Keep Event", continuations: continuations.actions.clickKeepEvent },
-                            { text: "Pass", continuations: continuations.actions.clickPass },
+                            { text: "Use AP", decision: optMap(continuations.decision, decision => ({ player: decision.player, continuation: decision.actions.clickUseAP })) },
+                            { text: "Use Event", decision: optMap(continuations.decision, decision => ({ player: decision.player, continuation: decision.actions.clickUseEvent })) },
+                            { text: "Keep Event", decision: optMap(continuations.decision, decision => ({ player: decision.player, continuation: decision.actions.clickKeepEvent })) },
+                            { text: "Pass", decision: optMap(continuations.decision, decision => ({ player: decision.player, continuation: decision.actions.clickPass })) },
                           ]
                             .map(b =>
                               <button
                                 key={b.text}
-                                disabled={b.continuations.hasValue === false}
+                                disabled={!(b.decision.hasValue && b.decision.value.continuation.hasValue)}
                                 onClick={() => {
-                                  if (b.continuations.hasValue) {
-                                    setGameState(b.continuations.value);
+                                  if (b.decision.hasValue && b.decision.value.player != modelPlayer && b.decision.value.continuation.hasValue) {
+                                    setGameState(b.decision.value.continuation.value);
                                   }
                                 }}
                               >
@@ -605,7 +713,10 @@ export default function App({ }: AppProps) {
                                       marginBottom: 0,
                                       maskImage: "",
                                     }
-                                    : (continuations.actions.clickKeptCard[player.id]?.some(c => c.hasValue) === true)
+                                    : (
+                                      continuations.decision.hasValue === false
+                                      || continuations.decision.value.actions.clickKeptCard[player.id]?.some(c => c.hasValue) === true
+                                    )
                                       ? {
                                         maxHeight: `calc(${trackHeight} * 1.25)`,
                                         marginBottom: "1dvw",
@@ -619,12 +730,27 @@ export default function App({ }: AppProps) {
                                 ),
                                 gridArea: "keptList",
                                 overflowY:
-                                  (continuations.actions.clickKeptCard[player.id]?.some(c => c.hasValue) === true) ? "scroll" : "clip",
+                                  (
+                                    continuations.decision.hasValue === false
+                                    || continuations.decision.value.actions.clickKeptCard[player.id]?.some(c => c.hasValue) === true
+                                  )
+                                    ? "scroll"
+                                    : "clip",
                               }}>
                               {
                                 gameState.board.kept[player.id]
-                                  .takeZip((continuations.actions.clickKeptCard[player.id] ?? []).padRight({ toLength: gameState.board.kept[player.id].length, getPadElement: () => nullopt }))
-                                  .map(([event, continuations]) =>
+                                  .takeZip(
+                                    (
+                                      continuationsDecision.hasValue === false
+                                        ? []
+                                        : (continuationsDecision.value.actions.clickKeptCard[player.id] ?? []).map(cOpt => optMap(cOpt, continuation => ({
+                                          player: continuationsDecision.value.player,
+                                          continuation
+                                        })))
+                                    )
+                                      .padRight({ toLength: gameState.board.kept[player.id].length, getPadElement: () => nullopt })
+                                  )
+                                  .map(([event, decision]) =>
                                     <div  // kept card
                                       key={event}
                                       style={{
@@ -641,8 +767,8 @@ export default function App({ }: AppProps) {
                                           border: "0.3dvw solid black",
                                         }}
                                         onClick={() => {
-                                          if (continuations.hasValue) {
-                                            setGameState(continuations.value);
+                                          if (decision.hasValue && decision.value.player != modelPlayer) {
+                                            setGameState(decision.value.continuation);
                                           }
                                         }}
                                       >
@@ -657,8 +783,15 @@ export default function App({ }: AppProps) {
                     </motion.div>,
 
                     ...gameState.board.cardTrack
-                      .takeZip(continuations.actions.clickTrackCard)
-                      .map(([card, continuations], iTrack) => {
+                      .takeZip(
+                        continuationsDecision.hasValue
+                          ? continuationsDecision.value.actions.clickTrackCard.map(cOpt => optMap(cOpt, continuation => ({
+                            player: continuationsDecision.value.player,
+                            continuation
+                          })))
+                          : gameState.board.cardTrack.map(() => nullopt)
+                      )
+                      .map(([card, decision], iTrack) => {
                         const side =
                           (
                             (
@@ -725,8 +858,8 @@ export default function App({ }: AppProps) {
                                 border: "0.3dvw solid black",
                               }}
                               onClick={() => {
-                                if (continuations.hasValue) {
-                                  setGameState(continuations.value);
+                                if (decision.hasValue && decision.value.player != modelPlayer) {
+                                  setGameState(decision.value.continuation);
                                 }
                               }}
                             >
@@ -751,7 +884,7 @@ export default function App({ }: AppProps) {
                               }} />
                               { // content
                                 card.type === CardType.Score
-                                  ? <div style={{ fontSize: 32, width: 200 }}>Score</div>
+                                  ? <div style={{ fontSize: 32, width: 200 }}>Score (30)</div>
                                   : eventCardDivs[card.event]
                               }
                             </div>
@@ -768,19 +901,39 @@ export default function App({ }: AppProps) {
       <div style={{ flex: 3, textAlign: "center", height: "100%", alignContent: "center" }}>
         <div>
           <span style={{ fontSize: 20 }}>{continuations.instructions}</span>
+          {
+            (
+              continuations.decision.hasValue
+              && continuations.decision.value.player === modelPlayer
+            )
+              ? <span style={{ fontSize: 12 }}>
+                &nbsp;(model thinking<AnimatedEllipses />)
+              </span>
+              : undefined
+          }
         </div>
         <div>
           <table style={{ display: "inline-block", verticalAlign: "top" }}><tbody>
             <tr>
               {
-                throwOnNullopt(sectors.zip(continuations.actions.clickSector), "bad continuations").map(([s, continuations]) =>
+                throwOnNullopt(
+                  sectors.zip(
+                    continuationsDecision.hasValue
+                      ? continuationsDecision.value.actions.clickSector.map(cOpt => optMap(cOpt, continuation => ({
+                        player: continuationsDecision.value.player,
+                        continuation
+                      })))
+                      : sectors.map(() => nullopt),
+                  ),
+                  "bad continuations"
+                ).map(([s, decision]) =>
                   <td
                     key={s.id}
                     style={{ fontSize: 32, border: "thick solid gray" }}
                     colSpan={orbitals.filter(o => bands[o.band]?.sector == s.id).length}
                     onClick={() => {
-                      if (continuations.hasValue) {
-                        setGameState(continuations.value);
+                      if (decision.hasValue && decision.value.player != modelPlayer) {
+                        setGameState(decision.value.continuation);
                       }
                     }}
                   >
@@ -791,13 +944,23 @@ export default function App({ }: AppProps) {
             </tr>
             <tr>
               {
-                throwOnNullopt(orbitals.zip(continuations.actions.clickOrbital), "bad continuations").map(([o, continuations]) =>
+                throwOnNullopt(
+                  orbitals.zip(
+                    continuationsDecision.hasValue
+                      ? continuationsDecision.value.actions.clickOrbital.map(cOpt => optMap(cOpt, continuation => ({
+                        player: continuationsDecision.value.player,
+                        continuation
+                      })))
+                      : sectors.map(() => nullopt),
+                  ),
+                  "bad continuations"
+                ).map(([o, decision]) =>
                   <td
                     key={o.id}
                     style={{ fontSize: 24, border: "thick solid gray" }}
                     onClick={() => {
-                      if (continuations.hasValue) {
-                        setGameState(continuations.value);
+                      if (decision.hasValue && decision.value.player != modelPlayer) {
+                        setGameState(decision.value.continuation);
                       }
                     }}
                   >
@@ -808,10 +971,25 @@ export default function App({ }: AppProps) {
             </tr>
             <tr>
               {
-                gameState.board.fleets
-                  .takeZip(continuations.actions.clickOrbital)
-                  .takeZip(continuations.actions.clickFleet)
-                  .map(([[oFleets, orbitalContinuations], orbitalFleetContinuations], orbital) =>
+                (
+                  continuationsDecision.hasValue
+                    ? (
+                      gameState.board.fleets
+                        .takeZip(continuationsDecision.value.actions.clickOrbital.map(cOpt => optMap(cOpt, continuation => ({
+                          player: continuationsDecision.value.player,
+                          continuation
+                        }))))
+                        .takeZip(continuationsDecision.value.actions.clickFleet.map(oConts => oConts.map(pConts => pConts.map(fCont => optMap(fCont, continuation => ({
+                          player: continuationsDecision.value.player,
+                          continuation
+                        }))))))
+                    )
+                    : gameState.board.fleets.map(oFleets => tuple2([
+                      tuple2([oFleets, nullopt]),
+                      [[], []],
+                    ]))
+                )
+                  .map(([[oFleets, orbitalDecision], orbitalFleetDecisions], orbital) =>
                     <td
                       key={orbital}
                       style={{
@@ -823,17 +1001,24 @@ export default function App({ }: AppProps) {
                               : "2px dotted gray",
                       }}
                       onClick={() => {
-                        if (orbitalContinuations.hasValue) {
-                          setGameState(orbitalContinuations.value);
+                        if (orbitalDecision.hasValue && orbitalDecision.value.player != modelPlayer) {
+                          setGameState(orbitalDecision.value.continuation);
                         }
                       }}
                     >
                       {
-                        players.takeZip(continuations.actions.clickBuildFleet).map(([player, buildContinuations]) =>
+                        players.takeZip(
+                          continuationsDecision.hasValue
+                            ? continuationsDecision.value.actions.clickBuildFleet.map(cOpt => optMap(cOpt, continuation => ({
+                              player: continuationsDecision.value.player,
+                              continuation
+                            })))
+                            : players.map(() => nullopt)
+                        ).map(([player, buildDecision]) =>
                           <span key={player.id}>
                             {
-                              (orbitalFleetContinuations[player.id] ?? []).padRight({ toLength: oFleets[player.id], getPadElement: () => nullopt })
-                                .map((fleetContinuations, iFleet) =>
+                              (orbitalFleetDecisions[player.id] ?? []).padRight({ toLength: oFleets[player.id], getPadElement: () => nullopt })
+                                .map((fleetDecision, iFleet) =>
                                   <span
                                     key={iFleet}
                                     style={(() => {
@@ -899,8 +1084,8 @@ export default function App({ }: AppProps) {
                                       return undefined;
                                     })()}
                                     onClick={() => {
-                                      if (fleetContinuations.hasValue) {
-                                        setGameState(fleetContinuations.value);
+                                      if (fleetDecision.hasValue && fleetDecision.value.player != modelPlayer) {
+                                        setGameState(fleetDecision.value.continuation);
                                       }
                                     }}
                                   >
@@ -911,10 +1096,10 @@ export default function App({ }: AppProps) {
                             {
                               player.homeOrbital == orbital
                                 ? <button
-                                  style={{ display: buildContinuations.hasValue ? "inline" : "none" }}
+                                  style={{ display: buildDecision.hasValue ? "inline" : "none" }}
                                   onClick={() => {
-                                    if (buildContinuations.hasValue) {
-                                      setGameState(buildContinuations.value);
+                                    if (buildDecision.hasValue && buildDecision.value.player != modelPlayer) {
+                                      setGameState(buildDecision.value.continuation);
                                     }
                                   }}
                                 >
@@ -946,14 +1131,10 @@ export default function App({ }: AppProps) {
                       row.map((b, iCol) => {
                         if (!b.hasValue) return <td key={iCol} />;
                         const base = bases[b.value];
-                        const baseContinuations = continuations.actions.clickBase[b.value];
-                        const baseInfluenceContinuations = continuations.actions.clickInfluence[b.value];
                         const fleets = gameState.board.fleets[base?.orbital ?? 0];
                         const influence = gameState.board.influence[b.value];
                         if (
                           base === undefined
-                          || baseContinuations === undefined
-                          || baseInfluenceContinuations === undefined
                           || fleets === undefined
                           || influence === undefined
                         ) return <td key={iCol} />;
@@ -961,6 +1142,10 @@ export default function App({ }: AppProps) {
                         const orbitalControlBonus = map2(players, p => fleets[p.id] > fleets[p.opposite] && influence[p.id] != 0 ? 1 : 0);
                         const power = map2(orbitalControlBonus, (bonus, p) => influence[p] + bonus);
 
+                        const baseDecision = optMap(continuationsDecision, decision => ({
+                          player: decision.player,
+                          continuation: decision.actions.clickBase[b.value] ?? nullopt,
+                        }));
                         return <td
                           key={iCol}
                           style={{
@@ -973,8 +1158,8 @@ export default function App({ }: AppProps) {
                             verticalAlign: "top",
                           }}
                           onClick={() => {
-                            if (baseContinuations.hasValue) {
-                              setGameState(baseContinuations.value);
+                            if (baseDecision.hasValue && baseDecision.value.player != modelPlayer && baseDecision.value.continuation.hasValue) {
+                              setGameState(baseDecision.value.continuation.value);
                             }
                           }}
                         >
@@ -984,8 +1169,16 @@ export default function App({ }: AppProps) {
                               players.map(player =>
                                 <span key={player.id}>
                                   {
-                                    (baseInfluenceContinuations[player.id] ?? []).padRight({ toLength: influence[player.id], getPadElement: () => nullopt })
-                                      .map((influenceContinuations, iInfluence) =>
+                                    (
+                                      continuationsDecision.hasValue
+                                        ? continuationsDecision.value.actions.clickInfluence[b.value]?.[player.id]?.map(cOpt => optMap(cOpt, continuation => ({
+                                          player: continuationsDecision.value.player,
+                                          continuation
+                                        }))) ?? []
+                                        : []
+                                    )
+                                      .padRight({ toLength: influence[player.id], getPadElement: () => nullopt })
+                                      .map((influenceDecision, iInfluence) =>
                                         <span
                                           key={iInfluence}
                                           style={(() => {
@@ -1006,8 +1199,8 @@ export default function App({ }: AppProps) {
                                             return undefined;
                                           })()}
                                           onClick={() => {
-                                            if (influenceContinuations.hasValue) {
-                                              setGameState(influenceContinuations.value);
+                                            if (influenceDecision.hasValue && influenceDecision.value.player != modelPlayer) {
+                                              setGameState(influenceDecision.value.continuation);
                                             }
                                           }}
                                         >
