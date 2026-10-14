@@ -930,8 +930,28 @@ function Game({ model }: GameProps) {
                       : sectors.map(() => nullopt),
                   ),
                   "bad continuations"
-                ).map(([s, decision]) =>
-                  <td
+                ).map(([s, decision]) => {
+                  const bonusStatus: "not bonus" | "revealed bonus" | "masked bonus" = (() => {
+                    if (!(
+                      gameState.phase.phase === "score turn kept event deciding"
+                      || gameState.phase.phase === "score turn kept event"
+                    )) return "not bonus";
+                    if (gameState.phase.bonusSector != s.id) return "not bonus";
+                    const action =
+                      gameState.phase.phase === "score turn kept event deciding"
+                        ? gameState.phase.action
+                        : gameState.phase.focus === EventId.Assassin
+                          ? gameState.phase.assassinAction
+                          : gameState.phase.action;
+                    if (action === gameState.phase.turn) return "revealed bonus";
+                    if (
+                      gameState.phase.phase === "score turn kept event"
+                      && gameState.phase.focus === EventId.Cotyar
+                    ) return "revealed bonus";
+                    return "masked bonus";
+                  })();
+
+                  return <td
                     key={s.id}
                     style={{ fontSize: 32, border: "thick solid gray" }}
                     colSpan={orbitals.filter(o => bands[o.band]?.sector == s.id).length}
@@ -941,9 +961,11 @@ function Game({ model }: GameProps) {
                       }
                     }}
                   >
+                    {["  ", "⠂ ", "⠒ "][gameState.board.bonusSectorsRemaining[s.id] - (bonusStatus === "revealed bonus" ? 1 : 0)]}
                     {s.name}
-                  </td>
-                )
+                    {bonusStatus === "revealed bonus" ? "⭐" : "  "}
+                  </td>;
+                })
               }
             </tr>
             <tr>

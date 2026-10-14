@@ -539,7 +539,7 @@ export class ExpanseModel_Centauri {
     this.session = session;
   }
 
-  public static weightsPath = "assets/model/0_centauri_7_weights___48463_1500502.onnx";
+  public static weightsPath = "assets/model/0_centauri_7_weights___95156_2950896.onnx";
   // can't use public release, shame: https://github.com/orgs/community/discussions/106849#discussioncomment-8534901
   /*
   public static weightsPath =

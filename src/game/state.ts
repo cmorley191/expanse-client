@@ -668,7 +668,7 @@ function startEventContinuation(
         board: {
           ...continuation.state.board,
           influence: continuation.state.board.influence.map(bInfluence =>
-            map2(bInfluence, i => Math.min(i, 2))),
+            map2(bInfluence, i => i >= 3 ? i - 1 : i)),
         },
       },
     });
