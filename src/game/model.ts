@@ -531,7 +531,31 @@ export function getStateContinuationsInputs(state: GameState): {
   };
 }
 
-export class ExpanseModel_Centauri {
+function normalCDF(x: number, mean: number, stdDev: number): number {
+  const z = (x - mean) / stdDev;
+
+  const p = 0.2315419;
+  const b1 = 0.319381530;
+  const b2 = -0.356563782;
+  const b3 = 1.781477937;
+  const b4 = -1.821255978;
+  const b5 = 1.330274429;
+
+  const absZ = Math.abs(z);
+  const t = 1.0 / (1.0 + p * absZ);
+
+  const pdf = (1.0 / Math.sqrt(2.0 * Math.PI)) * Math.exp(-0.5 * absZ * absZ);
+
+  const prob = 1.0 - pdf * (b1 * t + b2 * Math.pow(t, 2) + b3 * Math.pow(t, 3) + b4 * Math.pow(t, 4) + b5 * Math.pow(t, 5));
+
+  return (
+    z < 0
+      ? 1.0 - prob
+      : prob
+  );
+}
+
+export class ExpanseModel_Sirius {
 
   private session: ort.InferenceSession;
 
@@ -539,7 +563,7 @@ export class ExpanseModel_Centauri {
     this.session = session;
   }
 
-  public static weightsPath = "assets/model/0_centauri_7_weights___95156_2950896.onnx";
+  public static weightsPath = "assets/model/1_sirius_1_weights___147167_5001693.onnx";
   // can't use public release, shame: https://github.com/orgs/community/discussions/106849#discussioncomment-8534901
   /*
   public static weightsPath =
@@ -553,14 +577,14 @@ export class ExpanseModel_Centauri {
   public static async initialize() {
     ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@dev/dist/';
     const session = await ort.InferenceSession.create(
-      ExpanseModel_Centauri.weightsPath,
+      ExpanseModel_Sirius.weightsPath,
       { executionProviders: ['webgpu', 'wasm'] }
     );
 
-    return new ExpanseModel_Centauri(session);
+    return new ExpanseModel_Sirius(session);
   }
 
-  public async inferModelStateValues(inputs: ModelInput[]): Promise<number[]> {
+  public async inferModelStateMcrWinProbs(inputs: ModelInput[]): Promise<number[]> {
     const batch = inputs.length;
 
     const obs_bool_array = new Uint8Array(batch * OBS_BOOL.LENGTH);
@@ -580,14 +604,20 @@ export class ExpanseModel_Centauri {
 
     const results = await this.session.run({ obs_bool, obs_int, obs_slot_index, obs_pile_present });
 
-    const model_value = results['model_value'];
-    if (model_value === undefined) throw `model_value not in results`;
-    if (throwOnNullopt(model_value.dims.zip([batch, 1]), "unexpected output dims").some(([dim, expectedDim]) => dim != expectedDim)) throw `unexpected output dims`;
-    if (model_value.type != "float32") throw `unexpected output type`;
+    const model_output = results['model_output'];
+    if (model_output === undefined) throw `model_output not in results`;
+    if (throwOnNullopt(model_output.dims.zip([batch, 2]), "unexpected output dims").some(([dim, expectedDim]) => dim != expectedDim)) throw `unexpected output dims`;
+    if (model_output.type != "float32") throw `unexpected output type`;
 
-    const model_value_array = model_value.data;
-    if (!(model_value_array instanceof Float32Array)) throw `unexpected output.data type`;
-    return Array.from(model_value_array);
+    const model_output_array_data = model_output.data;
+    if (!(model_output_array_data instanceof Float32Array)) throw `unexpected output.data type`;
+    const model_output_array = Array.from(model_output_array_data).groupwise(2);
+
+    if (model_output_array.length != batch) throw `unexpected output array length`;
+    const mcr_win_array = model_output_array.map(out => 1 - normalCDF(0, out[0] ?? 0, out[1] ?? 0.000001));
+    console.log({ model_output_array, mcr_win_array });
+
+    return Array.from(mcr_win_array);
   }
 
 };

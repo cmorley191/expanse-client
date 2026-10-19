@@ -7,7 +7,7 @@ import { bands, BaseId, bases, Card, CardType, EventId, events, NONSCORES_PER_PI
 import { GameState, GameStateContinuation, GameStateContinuations, TurnHistoryItem } from "../game/state";
 import { getRandomInt, lerp, map2, satisfiesCheck, tuple2 } from "../core/misc";
 import { nullopt, opt, Optional, optMap, throwOnNullopt } from "../core/optional";
-import { ExpanseModel_Centauri, getStateContinuationsInputs } from "../game/model";
+import { ExpanseModel_Sirius, getStateContinuationsInputs } from "../game/model";
 import AnimatedEllipses from "./elements/animated_ellipses";
 
 
@@ -17,11 +17,11 @@ export default function App({ }: AppProps) {
   const [model, setModel] = React.useState<
     | { state: "loading" }
     | { state: "error", error: any }
-    | { state: "loaded", model: ExpanseModel_Centauri }
+    | { state: "loaded", model: ExpanseModel_Sirius }
   >({ state: "loading" });
 
   React.useEffect(() => {
-    ExpanseModel_Centauri.initialize()
+    ExpanseModel_Sirius.initialize()
       .then(
         newModel => setModel({ state: "loaded", model: newModel }),
         error => setModel({ state: "error", error })
@@ -46,14 +46,14 @@ export default function App({ }: AppProps) {
               <div style={{ fontSize: "1.5dvh" }}>{model.error.toString()}</div>
             </>
         }
-        <div style={{ fontSize: "1dvh" }}>{ExpanseModel_Centauri.weightsPath}</div>
+        <div style={{ fontSize: "1dvh" }}>{ExpanseModel_Sirius.weightsPath}</div>
       </div>
   );
 }
 
 
 type GameProps = {
-  model: ExpanseModel_Centauri
+  model: ExpanseModel_Sirius
 };
 
 function Game({ model }: GameProps) {
@@ -118,6 +118,8 @@ function Game({ model }: GameProps) {
     };
   });
 
+  const [mcrWinProb, setMcrWinProb] = React.useState<number>(0.5);
+
   const [modelChoice, setModelChoice] = React.useState<Optional<{
     trace: {
       choice: GameStateContinuation,
@@ -154,11 +156,12 @@ function Game({ model }: GameProps) {
       }, 4000 + getRandomInt(2000));
       return () => { clearTimeout(timeout); };
     }
+    return;
+  }, [modelChoice])
 
-    if (
-      continuations.decision.hasValue === false
-      || continuations.decision.value.player != modelPlayer
-    ) return () => { };
+  React.useEffect(() => {
+    const decision = continuations.decision;
+    if (decision.hasValue === false) return () => { };
 
     const choices = continuationsInputs.choices.filterTransform(choice =>
       choice.final.hasValue
@@ -168,22 +171,33 @@ function Game({ model }: GameProps) {
         })
         : nullopt
     );
-    if (choices.length != continuationsInputs.choices.length) throw `untraceable continuation`;
+    if (choices.length != continuationsInputs.choices.length) {
+      if (decision.value.player === modelPlayer) {
+        throw `untraceable continuation`;
+      } else {
+        console.error(`untraceable continuation -- continuing anyways since it is not model's turn`);
+      }
+      return;
+    }
 
-    model.inferModelStateValues(choices.map(c => c.final.input))
-      .then(values => {
-        const bestValue =
-          modelPlayer === 0
-            ? Math.max(...values)
-            : Math.min(...values);
-        const choice = values.takeZip(choices).filterTransform(([v, choice]) => v == bestValue ? opt(choice) : nullopt).get(0);
-        if (choice.hasValue === false) throw `no choice`;
-        setModelChoice(choice);
-      })
+    model.inferModelStateMcrWinProbs(choices.map(c => c.final.input))
+      .then(mcrWinProbs => {
+        const bestWinProb =
+          decision.value.player === 0
+            ? Math.max(...mcrWinProbs)
+            : Math.min(...mcrWinProbs);
+        setMcrWinProb(bestWinProb);
+
+        if (decision.value.player === modelPlayer) {
+          const choice = mcrWinProbs.takeZip(choices).filterTransform(([mcrWinProb, choice]) => mcrWinProb == bestWinProb ? opt(choice) : nullopt).get(0);
+          if (choice.hasValue === false) throw `no choice`;
+          setModelChoice(choice);
+        }
+      });
 
     return () => { };
 
-  }, [gameState, modelChoice]);
+  }, [gameState]);
 
   const eventCardDivs = events.map(event =>
     <div style={{ position: "relative", textAlign: "center", padding: "0.1dvw" }}>
@@ -903,6 +917,24 @@ function Game({ model }: GameProps) {
         </div>
       </div>
       <div style={{ flexGrow: 1, textAlign: "center", height: "100%", alignContent: "center" }}>
+        <div style={{
+          margin: "0.3dvh",
+          width: "50%",
+          height: "1dvw",
+          position: "relative",
+          left: "50%",
+          transform: "translateX(-50%)",
+          backgroundColor: "blue",
+          border: "0.1dvh solid black",
+          textAlign: "left",
+        }}>
+          <div style={{
+            backgroundColor: "red",
+            width: `${mcrWinProb * 100}%`,
+            height: "100%",
+            transition: "width 1.4s ease-in-out",
+          }} />
+        </div>
         <div>
           <span style={{ fontSize: 20 }}>{continuations.instructions}</span>
           {
