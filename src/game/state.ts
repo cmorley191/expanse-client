@@ -2189,6 +2189,17 @@ export function getContinuations(oldState: GameState): GameStateContinuations {
                   },
                   turnsComplete: [],
                 }))),
+
+            clickPass:
+              oldState.board.fleets.some(oFleets => oFleets.every(f => f > 0))
+                ? nullopt
+                : opt(endEventContinuation({
+                  state: {
+                    ...oldState,
+                    phase: oldPhase,
+                  },
+                  turnsComplete: [],
+                })),
           },
         }),
       };

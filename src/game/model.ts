@@ -563,7 +563,7 @@ export class ExpanseModel_Sirius {
     this.session = session;
   }
 
-  public static weightsPath = "assets/model/1_sirius_2_weights___179424_5901998.onnx";
+  public static weightsPath = "assets/model/1_sirius_2_weights___214206_6852312.onnx";
   // can't use public release, shame: https://github.com/orgs/community/discussions/106849#discussioncomment-8534901
   /*
   public static weightsPath =

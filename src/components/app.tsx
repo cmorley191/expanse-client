@@ -107,7 +107,7 @@ export function Canvas({ draw, ...rest }: CanvasProps) {
   return <motion.canvas ref={canvasRef} {...rest} />;
 };
 
-const radiusScale = 0.6;
+const radiusScale = 0.5;
 const bodyMeta: {
   name: string,
   semiMajorAU: number,
@@ -233,7 +233,7 @@ const bodyMeta: {
       render: {
         radiusAU: 0.09 * radiusScale,
         type: "plate",
-        periodD: 0.001,
+        periodD: 0.01,
         imageName: "assets/image/thoth.png",
       },
     },
