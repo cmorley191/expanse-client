@@ -186,6 +186,9 @@ export function weightedRandom(weights: number[]): Optional<number> {
 export function lerp(a: number, b: number, t: number) {
   return (b - a) * t + a;
 }
+export function unlerp(a: number, b: number, x: number) {
+  return (x - a) / (b - a);
+}
 
 export function tuple2<T, U>(t: [T, U]): [T, U] { return t; }
 export function tuple3<T, U, V>(t: [T, U, V]): [T, U, V] { return t; }

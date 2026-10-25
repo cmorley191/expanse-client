@@ -1,12 +1,12 @@
 import "../core/array_extensions";
 
 import * as React from "react";
-import { motion, Transition } from "motion/react";
+import { HTMLMotionProps, motion, Transition } from "motion/react";
 
 import { bands, BaseId, bases, Card, CardType, EventId, events, NONSCORES_PER_PILE, orbitals, PILES, PlayerId, players, SCORES_PER_PILE, sectors, TRACK_COUNT } from "../game/parameters";
 import { GameState, GameStateContinuation, GameStateContinuations, TurnHistoryItem } from "../game/state";
-import { getRandomInt, lerp, map2, satisfiesCheck, tuple2 } from "../core/misc";
-import { nullopt, opt, Optional, optMap, throwOnNullopt } from "../core/optional";
+import { assertType, getRandomInt, lerp, map2, satisfiesCheck, tuple2, unlerp } from "../core/misc";
+import { nullopt, opt, Optional, optMap, optValueOr, throwOnNullopt } from "../core/optional";
 import { ExpanseModel_Sirius, getStateContinuationsInputs } from "../game/model";
 import AnimatedEllipses from "./elements/animated_ellipses";
 
@@ -50,6 +50,220 @@ export default function App({ }: AppProps) {
       </div>
   );
 }
+
+
+function useAnimationFrame(animationEffect: () => { callback: FrameRequestCallback, cleanup: () => void }, deps?: React.DependencyList) {
+  React.useEffect(() => {
+    const animationEffectResult = animationEffect();
+
+    let animationFrameId: number = 0;
+
+    const animate: FrameRequestCallback = (currentTimeMs) => {
+      animationEffectResult.callback(currentTimeMs);
+      animationFrameId = window.requestAnimationFrame(animate);
+    };
+
+    animationFrameId = window.requestAnimationFrame(animate);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId);
+      animationEffectResult.cleanup();
+    };
+  }, deps);
+}
+
+function useLazyRef<T>(init: () => T) {
+  const ref = React.useRef<Optional<T>>(nullopt);
+  React.useEffect(() => { ref.current = opt(init()); }, []);
+  return ref;
+}
+
+
+type CanvasProps =
+  & HTMLMotionProps<"canvas">
+  & { draw: (context: CanvasRenderingContext2D, currentTimeMs: number) => void }
+  ;
+
+export function Canvas({ draw, ...rest }: CanvasProps) {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+
+  useAnimationFrame(() => {
+    const canvas = canvasRef.current;
+    if (canvas === null) throw `null canvas`;
+
+    const context = canvas.getContext('2d');
+    if (context === null) throw `null context`;
+
+    return {
+      callback: (currentTimeMs) => {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+        draw(context, currentTimeMs);
+      },
+      cleanup: () => { },
+    };
+  }, [draw]);
+
+  return <motion.canvas ref={canvasRef} {...rest} />;
+};
+
+const radiusScale = 0.6;
+const bodyMeta: {
+  name: string,
+  semiMajorAU: number,
+  semiMinorAU: number,
+  orbitRotationOffset: number,
+  orbitStartOffset: number,
+  render:
+  & { radiusAU: number }
+  & (
+    | { type: "sphere" | "plate", periodD: number, imageName: string }
+    | { type: "static", imageName: string }
+  ),
+}[] = [
+    {
+      name: "Mercury",
+      semiMajorAU: 0.387,
+      semiMinorAU: 0.378,
+      orbitRotationOffset: 0.508,
+      orbitStartOffset: 0.0,
+      render: {
+        radiusAU: 0.29 * radiusScale,
+        type: "sphere",
+        periodD: 58.65,
+        imageName: "assets/image/Mercury_-_complete_mono_basemap_2500mpp_equirectangular.png",
+      },
+    },
+    {
+      name: "Venus",
+      semiMajorAU: 0.723,
+      semiMinorAU: 0.722,
+      orbitRotationOffset: 0.958,
+      orbitStartOffset: 0.0,
+      render: {
+        radiusAU: 0.35 * radiusScale,
+        type: "sphere",
+        periodD: -243.02,
+        imageName: "assets/image/Cylindrical_Map_of_Venus.jpg",
+      },
+    },
+    {
+      name: "Earth",
+      semiMajorAU: 1.000,
+      semiMinorAU: 1.000,
+      orbitRotationOffset: 1.796,
+      orbitStartOffset: 0.45,
+      render: {
+        radiusAU: 0.37 * radiusScale,
+        type: "sphere",
+        periodD: 0.997,
+        imageName: "assets/image/Blue_Marble_2002.png",
+      },
+    },
+    {
+      name: "Mars",
+      semiMajorAU: 1.524,
+      semiMinorAU: 1.517,
+      orbitRotationOffset: 5.000,
+      orbitStartOffset: 0.0,
+      render: {
+        radiusAU: 0.31 * radiusScale,
+        type: "sphere",
+        periodD: 1.026,
+        imageName: "assets/image/Solarsystemscope_texture_8k_mars.jpg",
+      },
+    },
+    {
+      name: "Ceres",
+      semiMajorAU: 2.766,
+      semiMinorAU: 2.757,
+      orbitRotationOffset: 1.284,
+      orbitStartOffset: 0.68,
+      render: {
+        radiusAU: 0.18 * radiusScale,
+        type: "sphere",
+        periodD: 0.378,
+        imageName: "assets/image/Solarsystemscope_texture_4k_ceres_fictional.jpg",
+      },
+    },
+    {
+      name: "Vesta",
+      semiMajorAU: 2.362,
+      semiMinorAU: 2.353,
+      orbitRotationOffset: 2.647,
+      orbitStartOffset: 0.6,
+      render: {
+        radiusAU: 0.15 * radiusScale,
+        type: "sphere",
+        periodD: 0.223,
+        imageName: "assets/image/Vesta_map_for_GeoHack.png",
+      },
+    },
+    {
+      name: "Tycho",
+      semiMajorAU: 2.70,
+      semiMinorAU: 2.631,
+      orbitRotationOffset: 1.04,
+      orbitStartOffset: 0.8,
+      render: {
+        radiusAU: 0.11 * radiusScale,
+        type: "static",
+        imageName: "assets/image/tycho.png",
+      }
+    },
+    {
+      name: "Eros",
+      semiMajorAU: 1.458,
+      semiMinorAU: 1.421,
+      orbitRotationOffset: 3.121,
+      orbitStartOffset: 0.3,
+      render: {
+        radiusAU: 0.15 * radiusScale,
+        type: "sphere",
+        periodD: 0.220,
+        imageName: "assets/image/20150529_eros_map.jpg",
+      },
+    },
+    {
+      name: "Thoth",
+      semiMajorAU: 3.15,
+      semiMinorAU: 3.14,
+      orbitRotationOffset: 3.90,
+      orbitStartOffset: 0.35,
+      render: {
+        radiusAU: 0.09 * radiusScale,
+        type: "plate",
+        periodD: 0.001,
+        imageName: "assets/image/thoth.png",
+      },
+    },
+    {
+      name: "Jupiter",
+      semiMajorAU: 5.203,
+      semiMinorAU: 5.197,
+      orbitRotationOffset: 4.787,
+      orbitStartOffset: 0.15,
+      render: {
+        radiusAU: 0.67 * radiusScale,
+        type: "sphere",
+        periodD: 0.414,
+        imageName: "assets/image/Solarsystemscope_texture_2k_jupiter.jpg",
+      },
+    },
+    {
+      name: "Saturn",
+      semiMajorAU: 9.537,
+      semiMinorAU: 9.523,
+      orbitRotationOffset: 5.915,
+      orbitStartOffset: 0.03,
+      render: {
+        radiusAU: 0.57 * radiusScale,
+        type: "sphere",
+        periodD: 0.444,
+        imageName: "assets/image/Solarsystemscope_texture_2k_saturn.jpg",
+      },
+    },
+  ];
 
 
 type GameProps = {
@@ -134,7 +348,133 @@ function Game({ model }: GameProps) {
 
   const [turnHistory, setTurnHistory] = React.useState<TurnHistoryItem[]>([]);
 
+  const maxHistoryLength = (NONSCORES_PER_PILE + SCORES_PER_PILE) * PILES;
+  const [minDaysPerTurn, maxDaysPerTurn] = [5, 7];
+  const startDate = new Date(
+    new Date().getTime()
+    + 300 * 365.25 * 24 * 60 * 60 * 1000
+  );
+
+  const drawTimesRef = React.useRef<Optional<{
+    lastCheckpoint: {
+      drawTimeMs: number,
+      date: Date,
+    },
+    currentTimeMs: number,
+    currentDate: Date,
+    targetCheckpoint: {
+      drawTimeMs: number,
+      date: Date,
+    },
+  }>>(nullopt);
+
+  const [dateString, setDateString] = React.useState<Optional<string>>(nullopt);
+  useAnimationFrame(() => {
+    return {
+      callback: (currentTimeMs) => {
+        const newDrawTimes: (typeof drawTimesRef.current & { hasValue: true })["value"] = (() => {
+          const drawTimes = drawTimesRef.current;
+          if (drawTimes.hasValue === false) {
+            return {
+              lastCheckpoint: {
+                drawTimeMs: currentTimeMs - 1,
+                date: new Date(startDate.getTime() - 1),
+              },
+              currentTimeMs,
+              currentDate: startDate,
+              targetCheckpoint: {
+                drawTimeMs: currentTimeMs,
+                date: startDate,
+              }
+            };
+          } else {
+            return {
+              ...drawTimes.value,
+              currentTimeMs,
+              currentDate: new Date((() => {
+                const transitionElapsed = unlerp(
+                  drawTimes.value.lastCheckpoint.drawTimeMs,
+                  drawTimes.value.targetCheckpoint.drawTimeMs,
+                  currentTimeMs
+                );
+
+                const idleSpeed = (
+                  3 * 60 * 1000 // 3 minutes
+                  / (1000) // per second
+                ) * (
+                    (drawTimes.value.targetCheckpoint.drawTimeMs - drawTimes.value.lastCheckpoint.drawTimeMs)
+                    / (drawTimes.value.targetCheckpoint.date.getTime() - drawTimes.value.lastCheckpoint.date.getTime())
+                  );
+
+                return lerp(
+                  drawTimes.value.lastCheckpoint.date.getTime(),
+                  drawTimes.value.targetCheckpoint.date.getTime(),
+                  transitionElapsed < 0.5
+                    ? transitionElapsed * (2 * (1 - idleSpeed) * transitionElapsed + idleSpeed)
+                    : transitionElapsed < 1.0
+                      ? (transitionElapsed - 1) * (-2 * (1 - idleSpeed) * (transitionElapsed - 1) + idleSpeed) + 1
+                      : 1 + (transitionElapsed - 1) * idleSpeed
+                );
+              })()),
+            };
+          }
+        })();
+        if (!drawTimesRef.current.hasValue || drawTimesRef.current.value.currentDate.getDate() != newDrawTimes.currentDate.getDate()) {
+          setDateString(opt(newDrawTimes.currentDate.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })));
+        }
+
+        drawTimesRef.current = opt(newDrawTimes);
+      },
+      cleanup: () => { },
+    };
+  }, []);
+
+  const bodies = useLazyRef(() =>
+    bodyMeta.map((meta, iBody) => ({
+      meta,
+      image: (() => {
+        const image = new Image();
+        image.src = meta.render.imageName;
+        image.onload = () => {
+          console.log(`Loaded ${meta.render.imageName}`);
+          if (bodies.current.hasValue === false) throw `image load before bodies init finishes`;
+          bodies.current = opt(bodies.current.value.withMap(iBody, b => ({
+            ...b,
+            image: {
+              ...b.image,
+              loaded: true,
+            },
+          })));
+        }
+        return ({
+          image,
+          loaded: false,
+        });
+      })(),
+    }))
+  );
+
   function setGameState(continuation: GameStateContinuation) {
+    if (drawTimesRef.current.hasValue && continuation.turnsComplete.length > 0) {
+      drawTimesRef.current = opt({
+        ...drawTimesRef.current.value,
+        lastCheckpoint: {
+          drawTimeMs: drawTimesRef.current.value.currentTimeMs,
+          date: drawTimesRef.current.value.currentDate,
+        },
+        targetCheckpoint: {
+          drawTimeMs: drawTimesRef.current.value.currentTimeMs + 1000 * 10,
+          date: new Date(
+            drawTimesRef.current.value.currentDate.getTime()
+            + (
+              (Math.random() * (maxDaysPerTurn - minDaysPerTurn) + minDaysPerTurn)
+              * continuation.turnsComplete.length
+              * 24 * 60 * 60 * 1000
+            )
+          ),
+        },
+      })
+    }
     setTurnHistory(turnHistory.concat(continuation.turnsComplete));
     setGameStateRaw(continuation.state);
   }
@@ -197,7 +537,7 @@ function Game({ model }: GameProps) {
 
     return () => { };
 
-  }, [gameState]);
+  }, [model, gameState]);
 
   const eventCardDivs = events.map(event =>
     <div style={{ position: "relative", textAlign: "center", padding: "0.1dvw" }}>
@@ -271,7 +611,13 @@ function Game({ model }: GameProps) {
           display: none;
         }
       `}</style>
-      <div style={{ width: "50dvmin", height: "100%", position: "relative" }}>
+      <div style={{
+        width: "50dvmin",
+        height: "100%",
+        position: "relative",
+        backgroundColor: "rgba(0, 0, 0, 0.7)",
+        maskImage: "linear-gradient(to right, white calc(100% - 0.5dvw), transparent 100%)",
+      }}>
         <div // line
           style={{
             width: "0.1dvw",
@@ -298,11 +644,10 @@ function Game({ model }: GameProps) {
             boxSizing: "border-box",
             position: "relative",
             overflowY: "auto",
-            maskImage: "linear-gradient(to bottom, black 95%, transparent 100%)",
+            maskImage: "linear-gradient(to bottom, white 95%, transparent 100%)",
           }}>
           {
             (() => {
-              const maxHistoryLength = (NONSCORES_PER_PILE + SCORES_PER_PILE) * PILES;
               const maxHistoryFlex = 0.4;
               const totalHistoryFlex = lerp(0, maxHistoryFlex, Math.pow(turnHistory.length / maxHistoryLength, 0.8));
               const historyFlexes = (() => {
@@ -398,7 +743,7 @@ function Game({ model }: GameProps) {
                           <div
                             style={{
                               position: "relative",
-                              border: "0.3dvw solid black",
+                              border: "0.3dvw solid white",
                             }}
                           >
                             <div style={{
@@ -417,8 +762,8 @@ function Game({ model }: GameProps) {
                                     transform: `translate(calc(-0.3dvw - 50%), -50%) rotate(calc(45deg - 180deg))`,
                                   }
                               ),
-                              borderTop: "0.3dvw solid black",
-                              borderRight: "0.3dvw solid black",
+                              borderTop: "0.3dvw solid white",
+                              borderRight: "0.3dvw solid white",
                             }} />
                             {
                               historyItem.card.type === CardType.Score
@@ -501,7 +846,7 @@ function Game({ model }: GameProps) {
                           <div
                             style={{
                               position: "relative",
-                              border: "0.3dvw solid black",
+                              border: "0.3dvw solid white",
                             }}
                           >
                             <div style={{
@@ -520,8 +865,8 @@ function Game({ model }: GameProps) {
                                     transform: `translate(calc(-0.3dvw - 50%), -50%) rotate(calc(45deg - 180deg))`,
                                   }
                               ),
-                              borderTop: "0.3dvw solid black",
-                              borderRight: "0.3dvw solid black",
+                              borderTop: "0.3dvw solid white",
+                              borderRight: "0.3dvw solid white",
                             }} />
                             {
                               focus.value.type === CardType.Score
@@ -564,7 +909,7 @@ function Game({ model }: GameProps) {
                           position: "relative",
                           marginTop: historyTodayMargin,
                           marginBottom: "1dvh",
-                          backgroundColor: "rgba(200, 200, 200, 1.0)",
+                          backgroundColor: "rgba(255, 255, 255, 0.2)",
                           zIndex: 3,
                           display: "flex",
                           ...(
@@ -613,18 +958,87 @@ function Game({ model }: GameProps) {
                                   ? `calc(${todayDotWidth} / 2 + ${todayBorderWidth} / 2)`
                                   : 0,
                               fontSize: "1.8cqh",
-                              justifyItems: "center",
+                              display: "flex",
+                              justifyContent: "center",
                               alignContent: "center",
                             }}>
                             <motion.div // text (non-scaling)
                               layout="position"
                               transition={motionTransition}
+                              style={{
+                                alignContent: "center",
+                              }}
                             >
-                              {
-                                new Date(new Date().getFullYear() + 300, 0, 1 + (turnHistory.length / maxHistoryLength) * 366)
-                                  .toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
-                              }
+                              {optValueOr(dateString, "")}
                             </motion.div>
+                            <Canvas
+                              layout
+                              transition={motionTransition}
+                              style={{
+                                marginLeft: "0.5dvw",
+                                height: "100%",
+                                aspectRatio: 1,
+                              }}
+
+                              draw={React.useCallback((ctx) => {
+                                const drawTimes = drawTimesRef.current;
+                                if (drawTimes.hasValue === false) return;
+
+                                const width = ctx.canvas.clientWidth;
+
+                                ctx.clearRect(0, 0, width, width);
+
+                                const clockRadius = width * 0.3
+
+                                ctx.strokeStyle = '#bbbbbb';
+
+                                ctx.beginPath();
+                                ctx.arc(width / 2, width / 2, clockRadius, 0, Math.PI * 2);
+                                ctx.stroke();
+                                ctx.closePath();
+
+                                const hourAngle = -Math.PI / 2 + Math.PI * 2 * (
+                                  (
+                                    (
+                                      (drawTimes.value.currentDate.getHours() % 12)
+                                      + (
+                                        drawTimes.value.currentDate.getMinutes()
+                                        + (
+                                          + drawTimes.value.currentDate.getSeconds()
+                                          + drawTimes.value.currentDate.getMilliseconds() / 1000
+                                        ) / 60
+                                      ) / 60
+                                    ) / 12
+                                  )
+                                  % 1
+                                );
+                                const hourRadius = clockRadius * 0.5;
+                                ctx.beginPath();
+                                ctx.moveTo(width / 2, width / 2);
+                                ctx.lineTo(width / 2 + Math.cos(hourAngle) * hourRadius, width / 2 + Math.sin(hourAngle) * hourRadius);
+                                ctx.stroke();
+                                ctx.closePath();
+
+                                const minutesAngle = -Math.PI / 2 + Math.PI * 2 * (
+                                  (
+                                    (
+                                      drawTimes.value.currentDate.getMinutes()
+                                      + (
+                                        + drawTimes.value.currentDate.getSeconds()
+                                        + drawTimes.value.currentDate.getMilliseconds() / 1000
+                                      ) / 60
+                                    ) / 60
+                                  )
+                                  % 1
+                                );
+                                const minutesRadius = clockRadius * 0.8;
+                                ctx.beginPath();
+                                ctx.moveTo(width / 2, width / 2);
+                                ctx.lineTo(width / 2 + Math.cos(minutesAngle) * minutesRadius, width / 2 + Math.sin(minutesAngle) * minutesRadius);
+                                ctx.stroke();
+                                ctx.closePath();
+                              }, [])}
+                            />
                           </motion.div>
                         </motion.div>
                       </motion.div>
@@ -738,12 +1152,12 @@ function Game({ model }: GameProps) {
                                       ? {
                                         maxHeight: `calc(${trackHeight} * 1.25)`,
                                         marginBottom: "1dvw",
-                                        maskImage: "linear-gradient(to bottom, black 80%, transparent 100%)",
+                                        maskImage: "linear-gradient(to bottom, white 80%, transparent 100%)",
                                       }
                                       : {
                                         maxHeight: `calc(${trackHeight} * 0.25)`,
                                         marginBottom: 0,
-                                        maskImage: "linear-gradient(to bottom, black 0%, transparent 100%)",
+                                        maskImage: "linear-gradient(to bottom, white 0%, transparent 100%)",
                                       }
                                 ),
                                 gridArea: "keptList",
@@ -782,7 +1196,7 @@ function Game({ model }: GameProps) {
                                     >
                                       <div // border
                                         style={{
-                                          border: "0.3dvw solid black",
+                                          border: "0.3dvw solid white",
                                         }}
                                         onClick={() => {
                                           if (decision.hasValue && decision.value.player != modelPlayer) {
@@ -873,7 +1287,7 @@ function Game({ model }: GameProps) {
                             <div // border
                               style={{
                                 position: "relative",
-                                border: "0.3dvw solid black",
+                                border: "0.3dvw solid white",
                               }}
                               onClick={() => {
                                 if (decision.hasValue && decision.value.player != modelPlayer) {
@@ -897,8 +1311,8 @@ function Game({ model }: GameProps) {
                                       transform: `translate(calc(-0.3dvw - 50%), -50%) rotate(calc(45deg - 180deg))`,
                                     }
                                 ),
-                                borderTop: "0.3dvw solid black",
-                                borderRight: "0.3dvw solid black",
+                                borderTop: "0.3dvw solid white",
+                                borderRight: "0.3dvw solid white",
                               }} />
                               { // content
                                 card.type === CardType.Score
@@ -916,191 +1330,338 @@ function Game({ model }: GameProps) {
           }
         </div>
       </div>
-      <div style={{ flexGrow: 1, textAlign: "center", height: "100%", alignContent: "center" }}>
-        <div style={{
-          margin: "0.3dvh",
-          width: "50%",
-          height: "1dvw",
-          position: "relative",
-          left: "50%",
-          transform: "translateX(-50%)",
-          backgroundColor: "blue",
-          border: "0.1dvh solid black",
-          textAlign: "left",
-        }}>
-          <div style={{
-            backgroundColor: "red",
-            width: `${mcrWinProb * 100}%`,
-            height: "100%",
-            transition: "width 1.4s ease-in-out",
-          }} />
-        </div>
-        <div>
-          <span style={{ fontSize: 20 }}>{continuations.instructions}</span>
-          {
-            (
-              continuations.decision.hasValue
-              && continuations.decision.value.player === modelPlayer
-            )
-              ? <span style={{ fontSize: 12 }}>
-                &nbsp;(model thinking<AnimatedEllipses />)
-              </span>
-              : undefined
-          }
-        </div>
-        <div>
-          <table style={{ display: "inline-block", verticalAlign: "top" }}><tbody>
-            <tr>
-              {
-                throwOnNullopt(
-                  sectors.zip(
-                    continuationsDecision.hasValue
-                      ? continuationsDecision.value.actions.clickSector.map(cOpt => optMap(cOpt, continuation => ({
-                        player: continuationsDecision.value.player,
-                        continuation
-                      })))
-                      : sectors.map(() => nullopt),
-                  ),
-                  "bad continuations"
-                ).map(([s, decision]) => {
-                  const bonusStatus: "not bonus" | "revealed bonus" | "masked bonus" = (() => {
-                    if (!(
-                      gameState.phase.phase === "score turn kept event deciding"
-                      || gameState.phase.phase === "score turn kept event"
-                    )) return "not bonus";
-                    if (gameState.phase.bonusSector != s.id) return "not bonus";
-                    const action =
-                      gameState.phase.phase === "score turn kept event deciding"
-                        ? gameState.phase.action
-                        : gameState.phase.focus === EventId.Assassin
-                          ? gameState.phase.assassinAction
-                          : gameState.phase.action;
-                    if (action === gameState.phase.turn) return "revealed bonus";
-                    if (
-                      gameState.phase.phase === "score turn kept event"
-                      && gameState.phase.focus === EventId.Cotyar
-                    ) return "revealed bonus";
-                    return "masked bonus";
-                  })();
+      <div style={{ flexGrow: 1, height: "100%", position: "relative" }}>
+        <Canvas // map
+          style={{
+            position: "absolute",
+            width: "200%",
+            height: "100dvh",
+            left: "-100%",
+            zIndex: -1,
+            display: "block",
+          }}
 
-                  return <td
-                    key={s.id}
-                    style={{ fontSize: 32, border: "thick solid gray" }}
-                    colSpan={orbitals.filter(o => bands[o.band]?.sector == s.id).length}
-                    onClick={() => {
-                      if (decision.hasValue && decision.value.player != modelPlayer) {
-                        setGameState(decision.value.continuation);
-                      }
-                    }}
-                  >
-                    {["  ", "⠂ ", "⠒ "][gameState.board.bonusSectorsRemaining[s.id] - (bonusStatus === "revealed bonus" ? 1 : 0)]}
-                    {s.name}
-                    {bonusStatus === "revealed bonus" ? "⭐" : "  "}
-                  </td>;
-                })
+          draw={React.useCallback((ctx) => {
+            if (
+              drawTimesRef.current.hasValue === false
+              || bodies.current.hasValue === false
+            ) return;
+
+            const currentSimTimeD = (drawTimesRef.current.value.currentDate.getTime() - startDate.getTime()) / 24 / 60 / 60 / 1000;
+
+            const width = ctx.canvas.clientWidth;
+            const height = ctx.canvas.clientHeight;
+
+            const systemRadiusAU = 11.5;
+            const systemRotation = 0.2;
+            const scalePower = 0.5;
+
+            ctx.clearRect(0, 0, width, height);
+
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, width, height);
+
+            const sunRadius = 1.0 * radiusScale / systemRadiusAU * width / 2;
+            ctx.ellipse(width / 2, height / 2, sunRadius, sunRadius, 0, 0, Math.PI * 2);
+            ctx.fillStyle = '#ffff00';
+            ctx.fill();
+
+            bodies.current.value.forEach(body => {
+              const semiMajor = Math.pow(body.meta.semiMajorAU / systemRadiusAU, scalePower) * width / 2;
+              const semiMinor = Math.pow(body.meta.semiMinorAU / systemRadiusAU, scalePower) * width / 2;
+              const centerOffset = -Math.sqrt(semiMajor * semiMajor - semiMinor * semiMinor);
+              const eccentricity = Math.sqrt(1 - semiMinor * semiMinor / semiMajor / semiMajor);
+              let rotation = body.meta.orbitRotationOffset + systemRotation;
+
+              ctx.beginPath();
+              ctx.ellipse(
+                width / 2 + centerOffset * Math.cos(rotation),
+                height / 2 + centerOffset * Math.sin(rotation),
+                Math.pow(body.meta.semiMajorAU / systemRadiusAU, scalePower) * width / 2,
+                Math.pow(body.meta.semiMinorAU / systemRadiusAU, scalePower) * width / 2,
+                rotation,
+                0,
+                Math.PI * 2);
+              ctx.strokeStyle = '#dddddd';
+              ctx.stroke();
+              ctx.closePath();
+
+              const orbitalPeriodD = Math.pow(body.meta.semiMajorAU, 1.5) * 365.26;
+              const orbitT = currentSimTimeD / orbitalPeriodD + body.meta.orbitStartOffset;
+              const meanAnomaly = Math.PI * 2 * orbitT;
+              // newton's method
+              const eccentricAnomaly = Array(3).fill(false).reduce((lastEstimation) =>
+                lastEstimation - (
+                  (
+                    lastEstimation
+                    - eccentricity * Math.sin(lastEstimation)
+                    - meanAnomaly
+                  ) / (
+                    1
+                    - eccentricity * Math.cos(lastEstimation)
+                  )
+                ),
+                meanAnomaly
+              );
+              let x = semiMajor * Math.cos(eccentricAnomaly);
+              let y = semiMinor * Math.sin(eccentricAnomaly);
+              let r = Math.sqrt(x * x + y * y)
+              let theta = Math.atan2(y, x);
+              theta += rotation;
+              x = r * Math.cos(theta);
+              y = r * Math.sin(theta);
+              x += centerOffset * Math.cos(rotation);
+              y += centerOffset * Math.sin(rotation);
+              x += width / 2
+              y += height / 2
+
+              //ctx.fillStyle = '#ffffff';
+              //ctx.fillRect(x, y, 20, 20);
+
+              const image = body.image;
+              if (image.loaded === false) return;
+
+              const radius = body.meta.render.radiusAU / systemRadiusAU * width / 2;
+              if (body.meta.render.type === "sphere") {
+                const width = image.image.naturalWidth * radius / image.image.naturalHeight * 2;
+                const slideX = width * ((currentSimTimeD / Math.abs(body.meta.render.periodD)) % 1.0);
+                const slideSign = body.meta.render.periodD > 0 ? -1 : 1;
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.clip();
+                ctx.drawImage(image.image, x - radius - slideSign * slideX, y - radius, width, radius * 2);
+                ctx.drawImage(image.image, x - radius + slideSign * (width - slideX), y - radius, width, radius * 2);
+                ctx.restore();
               }
-            </tr>
-            <tr>
-              {
-                throwOnNullopt(
-                  orbitals.zip(
-                    continuationsDecision.hasValue
-                      ? continuationsDecision.value.actions.clickOrbital.map(cOpt => optMap(cOpt, continuation => ({
-                        player: continuationsDecision.value.player,
-                        continuation
-                      })))
-                      : orbitals.map(() => nullopt),
-                  ),
-                  "bad continuations"
-                ).map(([o, decision]) =>
-                  <td
-                    key={o.id}
-                    style={{ fontSize: 24, border: "thick solid gray" }}
-                    onClick={() => {
-                      if (decision.hasValue && decision.value.player != modelPlayer) {
-                        setGameState(decision.value.continuation);
-                      }
-                    }}
-                  >
-                    {o.name}
-                  </td>
-                )
+              else if (body.meta.render.type === "plate") {
+                const rotate = Math.PI * 2 * ((currentSimTimeD / Math.abs(body.meta.render.periodD)) % 1.0);
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(rotate);
+                ctx.drawImage(image.image, -radius, -radius, radius * 2, radius * 2);
+                ctx.restore();
               }
-            </tr>
-            <tr>
-              {
-                (
-                  continuationsDecision.hasValue
-                    ? (
-                      gameState.board.fleets
-                        .takeZip(continuationsDecision.value.actions.clickOrbital.map(cOpt => optMap(cOpt, continuation => ({
+              else {
+                assertType<"static">(body.meta.render.type);
+                ctx.drawImage(image.image, x - radius, y - radius, radius * 2, radius * 2);
+              }
+            });
+          }, [])}
+        />
+        <div style={{ width: "100%", height: "100%", textAlign: "center", alignContent: "center" }}>
+          <div style={{ // win prob bar
+            margin: "0.3dvh",
+            width: "50%",
+            height: "1dvw",
+            position: "relative",
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: "blue",
+            border: "0.1dvh solid white",
+            textAlign: "left",
+          }}>
+            <div style={{
+              backgroundColor: "red",
+              width: `${mcrWinProb * 100}%`,
+              height: "100%",
+              transition: "width 1.4s ease-in-out",
+            }} />
+          </div>
+          <div // instructions banner
+          >
+            <span style={{ fontSize: 20 }}>{continuations.instructions}</span>
+            {
+              (
+                continuations.decision.hasValue
+                && continuations.decision.value.player === modelPlayer
+              )
+                ? <span style={{ fontSize: 12 }}>
+                  &nbsp;(model thinking<AnimatedEllipses />)
+                </span>
+                : undefined
+            }
+          </div>
+          <div // board
+          >
+            <table style={{ display: "inline-block", verticalAlign: "top" }}><tbody>
+              <tr>
+                {
+                  throwOnNullopt(
+                    sectors.zip(
+                      continuationsDecision.hasValue
+                        ? continuationsDecision.value.actions.clickSector.map(cOpt => optMap(cOpt, continuation => ({
                           player: continuationsDecision.value.player,
                           continuation
-                        }))))
-                        .takeZip(continuationsDecision.value.actions.clickFleet.map(oConts => oConts.map(pConts => pConts.map(fCont => optMap(fCont, continuation => ({
-                          player: continuationsDecision.value.player,
-                          continuation
-                        }))))))
-                    )
-                    : gameState.board.fleets.map(oFleets => tuple2([
-                      tuple2([oFleets, nullopt]),
-                      [[], []],
-                    ]))
-                )
-                  .map(([[oFleets, orbitalDecision], orbitalFleetDecisions], orbital) =>
-                    <td
-                      key={orbital}
-                      style={{
-                        border:
-                          (oFleets[0] > oFleets[1])
-                            ? "2px dotted red"
-                            : (oFleets[1] > oFleets[0])
-                              ? "2px dotted blue"
-                              : "2px dotted gray",
-                      }}
+                        })))
+                        : sectors.map(() => nullopt),
+                    ),
+                    "bad continuations"
+                  ).map(([s, decision]) => {
+                    const bonusStatus: "not bonus" | "revealed bonus" | "masked bonus" = (() => {
+                      if (!(
+                        gameState.phase.phase === "score turn kept event deciding"
+                        || gameState.phase.phase === "score turn kept event"
+                      )) return "not bonus";
+                      if (gameState.phase.bonusSector != s.id) return "not bonus";
+                      const action =
+                        gameState.phase.phase === "score turn kept event deciding"
+                          ? gameState.phase.action
+                          : gameState.phase.focus === EventId.Assassin
+                            ? gameState.phase.assassinAction
+                            : gameState.phase.action;
+                      if (action === gameState.phase.turn) return "revealed bonus";
+                      if (
+                        gameState.phase.phase === "score turn kept event"
+                        && gameState.phase.focus === EventId.Cotyar
+                      ) return "revealed bonus";
+                      return "masked bonus";
+                    })();
+
+                    return <td
+                      key={s.id}
+                      style={{ fontSize: 32, border: "thick solid gray" }}
+                      colSpan={orbitals.filter(o => bands[o.band]?.sector == s.id).length}
                       onClick={() => {
-                        if (orbitalDecision.hasValue && orbitalDecision.value.player != modelPlayer) {
-                          setGameState(orbitalDecision.value.continuation);
+                        if (decision.hasValue && decision.value.player != modelPlayer) {
+                          setGameState(decision.value.continuation);
                         }
                       }}
                     >
-                      {
-                        players.takeZip(
-                          continuationsDecision.hasValue
-                            ? continuationsDecision.value.actions.clickBuildFleet.map(cOpt => optMap(cOpt, continuation => ({
-                              player: continuationsDecision.value.player,
-                              continuation
-                            })))
-                            : players.map(() => nullopt)
-                        ).map(([player, buildDecision]) =>
-                          <span key={player.id}>
-                            {
-                              (orbitalFleetDecisions[player.id] ?? []).padRight({ toLength: oFleets[player.id], getPadElement: () => nullopt })
-                                .map((fleetDecision, iFleet) =>
-                                  <span
-                                    key={iFleet}
-                                    style={(() => {
-                                      if (
-                                        (
+                      {["  ", "⠂ ", "⠒ "][gameState.board.bonusSectorsRemaining[s.id] - (bonusStatus === "revealed bonus" ? 1 : 0)]}
+                      {s.name}
+                      {bonusStatus === "revealed bonus" ? "⭐" : "  "}
+                    </td>;
+                  })
+                }
+              </tr>
+              <tr>
+                {
+                  throwOnNullopt(
+                    orbitals.zip(
+                      continuationsDecision.hasValue
+                        ? continuationsDecision.value.actions.clickOrbital.map(cOpt => optMap(cOpt, continuation => ({
+                          player: continuationsDecision.value.player,
+                          continuation
+                        })))
+                        : orbitals.map(() => nullopt),
+                    ),
+                    "bad continuations"
+                  ).map(([o, decision]) =>
+                    <td
+                      key={o.id}
+                      style={{ fontSize: 24, border: "thick solid gray" }}
+                      onClick={() => {
+                        if (decision.hasValue && decision.value.player != modelPlayer) {
+                          setGameState(decision.value.continuation);
+                        }
+                      }}
+                    >
+                      {o.name}
+                    </td>
+                  )
+                }
+              </tr>
+              <tr>
+                {
+                  (
+                    continuationsDecision.hasValue
+                      ? (
+                        gameState.board.fleets
+                          .takeZip(continuationsDecision.value.actions.clickOrbital.map(cOpt => optMap(cOpt, continuation => ({
+                            player: continuationsDecision.value.player,
+                            continuation
+                          }))))
+                          .takeZip(continuationsDecision.value.actions.clickFleet.map(oConts => oConts.map(pConts => pConts.map(fCont => optMap(fCont, continuation => ({
+                            player: continuationsDecision.value.player,
+                            continuation
+                          }))))))
+                      )
+                      : gameState.board.fleets.map(oFleets => tuple2([
+                        tuple2([oFleets, nullopt]),
+                        [[], []],
+                      ]))
+                  )
+                    .map(([[oFleets, orbitalDecision], orbitalFleetDecisions], orbital) =>
+                      <td
+                        key={orbital}
+                        style={{
+                          border:
+                            (oFleets[0] > oFleets[1])
+                              ? "2px dotted red"
+                              : (oFleets[1] > oFleets[0])
+                                ? "2px dotted blue"
+                                : "2px dotted gray",
+                        }}
+                        onClick={() => {
+                          if (orbitalDecision.hasValue && orbitalDecision.value.player != modelPlayer) {
+                            setGameState(orbitalDecision.value.continuation);
+                          }
+                        }}
+                      >
+                        {
+                          players.takeZip(
+                            continuationsDecision.hasValue
+                              ? continuationsDecision.value.actions.clickBuildFleet.map(cOpt => optMap(cOpt, continuation => ({
+                                player: continuationsDecision.value.player,
+                                continuation
+                              })))
+                              : players.map(() => nullopt)
+                          ).map(([player, buildDecision]) =>
+                            <span key={player.id}>
+                              {
+                                (orbitalFleetDecisions[player.id] ?? []).padRight({ toLength: oFleets[player.id], getPadElement: () => nullopt })
+                                  .map((fleetDecision, iFleet) =>
+                                    <span
+                                      key={iFleet}
+                                      style={(() => {
+                                        if (
                                           (
                                             (
-                                              gameState.phase.phase === "ap turn ap"
-                                              && gameState.phase.turn === player.id
-                                            )
-                                            || (
                                               (
-                                                gameState.phase.phase === "ap turn initiative event"
-                                                || gameState.phase.phase === "event turn event"
-                                                || gameState.phase.phase === "score turn kept event"
+                                                gameState.phase.phase === "ap turn ap"
+                                                && gameState.phase.turn === player.id
                                               )
-                                              && (
-                                                gameState.phase.focus === EventId.Drummer
-                                                || gameState.phase.focus === EventId.Cotyar
-                                                || gameState.phase.focus === EventId.HeavyBurn
-                                                || gameState.phase.focus === EventId.AdmiralSouther
+                                              || (
+                                                (
+                                                  gameState.phase.phase === "ap turn initiative event"
+                                                  || gameState.phase.phase === "event turn event"
+                                                  || gameState.phase.phase === "score turn kept event"
+                                                )
+                                                && (
+                                                  gameState.phase.focus === EventId.Drummer
+                                                  || gameState.phase.focus === EventId.Cotyar
+                                                  || gameState.phase.focus === EventId.HeavyBurn
+                                                  || gameState.phase.focus === EventId.AdmiralSouther
+                                                )
+                                                && (
+                                                  player.id == (
+                                                    gameState.phase.phase === "ap turn initiative event"
+                                                      ? players[gameState.phase.turn].opposite
+                                                      : gameState.phase.phase === "event turn event"
+                                                        ? gameState.phase.turn
+                                                        : satisfiesCheck<"score turn kept event">(gameState.phase.phase)(gameState.phase.action)
+                                                  )
+                                                )
                                               )
-                                              && (
-                                                player.id == (
+                                            )
+                                            && gameState.phase.selectedFleetGroup.hasValue
+                                            && gameState.phase.selectedFleetGroup.value.orbital == orbital
+                                            && iFleet < gameState.phase.selectedFleetGroup.value.count
+                                          )
+                                          || (
+                                            (
+                                              gameState.phase.phase === "ap turn initiative event"
+                                              || gameState.phase.phase === "event turn event"
+                                              || gameState.phase.phase === "score turn kept event"
+                                            )
+                                            && (
+                                              (
+                                                gameState.phase.focus === EventId.Razorback
+                                                && iFleet == 0
+                                                && gameState.phase.selectedFleet.hasValue
+                                                && gameState.phase.selectedFleet.value === orbital
+                                                && player.id === (
                                                   gameState.phase.phase === "ap turn initiative event"
                                                     ? players[gameState.phase.turn].opposite
                                                     : gameState.phase.phase === "event turn event"
@@ -1110,174 +1671,149 @@ function Game({ model }: GameProps) {
                                               )
                                             )
                                           )
-                                          && gameState.phase.selectedFleetGroup.hasValue
-                                          && gameState.phase.selectedFleetGroup.value.orbital == orbital
-                                          && iFleet < gameState.phase.selectedFleetGroup.value.count
-                                        )
-                                        || (
-                                          (
-                                            gameState.phase.phase === "ap turn initiative event"
-                                            || gameState.phase.phase === "event turn event"
-                                            || gameState.phase.phase === "score turn kept event"
-                                          )
-                                          && (
-                                            (
-                                              gameState.phase.focus === EventId.Razorback
-                                              && iFleet == 0
-                                              && gameState.phase.selectedFleet.hasValue
-                                              && gameState.phase.selectedFleet.value === orbital
-                                              && player.id === (
-                                                gameState.phase.phase === "ap turn initiative event"
-                                                  ? players[gameState.phase.turn].opposite
-                                                  : gameState.phase.phase === "event turn event"
-                                                    ? gameState.phase.turn
-                                                    : satisfiesCheck<"score turn kept event">(gameState.phase.phase)(gameState.phase.action)
-                                              )
-                                            )
-                                          )
-                                        )
-                                      ) {
-                                        return { background: "yellow" };
-                                      }
-                                      return undefined;
-                                    })()}
+                                        ) {
+                                          return { background: "yellow" };
+                                        }
+                                        return undefined;
+                                      })()}
+                                      onClick={() => {
+                                        if (fleetDecision.hasValue && fleetDecision.value.player != modelPlayer) {
+                                          setGameState(fleetDecision.value.continuation);
+                                        }
+                                      }}
+                                    >
+                                      {player.id === PlayerId.MCR ? "🚀" : "🛸"}
+                                    </span>
+                                  )
+                              }
+                              {
+                                player.homeOrbital == orbital
+                                  ? <button
+                                    style={{ display: buildDecision.hasValue ? "inline" : "none" }}
                                     onClick={() => {
-                                      if (fleetDecision.hasValue && fleetDecision.value.player != modelPlayer) {
-                                        setGameState(fleetDecision.value.continuation);
+                                      if (buildDecision.hasValue && buildDecision.value.player != modelPlayer) {
+                                        setGameState(buildDecision.value.continuation);
                                       }
                                     }}
                                   >
-                                    {player.id === PlayerId.MCR ? "🚀" : "🛸"}
-                                  </span>
-                                )
-                            }
-                            {
-                              player.homeOrbital == orbital
-                                ? <button
-                                  style={{ display: buildDecision.hasValue ? "inline" : "none" }}
-                                  onClick={() => {
-                                    if (buildDecision.hasValue && buildDecision.value.player != modelPlayer) {
-                                      setGameState(buildDecision.value.continuation);
+                                    +
+                                  </button>
+                                  : undefined
+                              }
+                              {player.id == players.length - 1 ? undefined : <span style={{ fontSize: 8 }}>{oFleets[0] != 0 && oFleets[1] != 0 ? "💥" : ""}</span>}
+                            </span>)
+                        }
+                      </td>
+                    )
+                }
+              </tr>
+              {
+                [
+                  [
+                    opt(BaseId.Eurasia), opt(BaseId.MarinerValley), opt(BaseId.Ceres), opt(BaseId.Tycho),
+                    opt(BaseId.Eros), opt(BaseId.Thoth), opt(BaseId.Europa), opt(BaseId.Rhea),
+                  ],
+                  [
+                    opt(BaseId.Africa), opt(BaseId.LondresNova), nullopt, nullopt,
+                    nullopt, nullopt, opt(BaseId.Ganymede), opt(BaseId.Titan),
+                  ],
+                ]
+                  .map((row, iRow) =>
+                    <tr key={iRow}>
+                      {
+                        row.map((b, iCol) => {
+                          if (!b.hasValue) return <td key={iCol} />;
+                          const base = bases[b.value];
+                          const fleets = gameState.board.fleets[base?.orbital ?? 0];
+                          const influence = gameState.board.influence[b.value];
+                          if (
+                            base === undefined
+                            || fleets === undefined
+                            || influence === undefined
+                          ) return <td key={iCol} />;
+
+                          const orbitalControlBonus = map2(players, p => fleets[p.id] > fleets[p.opposite] && influence[p.id] != 0 ? 1 : 0);
+                          const power = map2(orbitalControlBonus, (bonus, p) => influence[p] + bonus);
+
+                          const baseDecision = optMap(continuationsDecision, decision => ({
+                            player: decision.player,
+                            continuation: decision.actions.clickBase[b.value] ?? nullopt,
+                          }));
+                          return <td
+                            key={iCol}
+                            style={{
+                              border:
+                                (power[0] > power[1])
+                                  ? "medium dashed red"
+                                  : (power[1] > power[0])
+                                    ? "medium dashed blue"
+                                    : "medium dashed gray",
+                              verticalAlign: "top",
+                            }}
+                            onClick={() => {
+                              if (baseDecision.hasValue && baseDecision.value.player != modelPlayer && baseDecision.value.continuation.hasValue) {
+                                setGameState(baseDecision.value.continuation.value);
+                              }
+                            }}
+                          >
+                            <div style={{ fontSize: 16 }}>{base.name}</div>
+                            <div>
+                              {
+                                players.map(player =>
+                                  <span key={player.id}>
+                                    {
+                                      (
+                                        continuationsDecision.hasValue
+                                          ? continuationsDecision.value.actions.clickInfluence[b.value]?.[player.id]?.map(cOpt => optMap(cOpt, continuation => ({
+                                            player: continuationsDecision.value.player,
+                                            continuation
+                                          }))) ?? []
+                                          : []
+                                      )
+                                        .padRight({ toLength: influence[player.id], getPadElement: () => nullopt })
+                                        .map((influenceDecision, iInfluence) =>
+                                          <span
+                                            key={iInfluence}
+                                            style={(() => {
+                                              if (
+                                                (
+                                                  gameState.phase.phase === "ap turn initiative event"
+                                                  || gameState.phase.phase === "event turn event"
+                                                  || gameState.phase.phase === "score turn kept event"
+                                                )
+                                                && gameState.phase.focus === EventId.CovertOp
+                                                && gameState.phase.selectedInfluence.hasValue
+                                                && gameState.phase.selectedInfluence.value.base === base.id
+                                                && gameState.phase.selectedInfluence.value.player === player.id
+                                                && iInfluence == 0
+                                              ) {
+                                                return { background: "yellow" };
+                                              }
+                                              return undefined;
+                                            })()}
+                                            onClick={() => {
+                                              if (influenceDecision.hasValue && influenceDecision.value.player != modelPlayer) {
+                                                setGameState(influenceDecision.value.continuation);
+                                              }
+                                            }}
+                                          >
+                                            {player.id === PlayerId.MCR ? "🎴" : "🌐"}
+                                          </span>
+                                        )
                                     }
-                                  }}
-                                >
-                                  +
-                                </button>
-                                : undefined
-                            }
-                            {player.id == players.length - 1 ? undefined : <span style={{ fontSize: 8 }}>{oFleets[0] != 0 && oFleets[1] != 0 ? "💥" : ""}</span>}
-                          </span>)
+                                    <span>{"🪐".repeat(orbitalControlBonus[player.id])}</span>
+                                    {player.id == players.length - 1 ? undefined : <span style={{ fontSize: 8 }}>{power[0] != 0 && power[1] != 0 ? "⚔️" : ""}</span>}
+                                  </span>)
+                              }
+                            </div>
+                          </td>
+                        })
                       }
-                    </td>
+                    </tr>
                   )
               }
-            </tr>
-            {
-              [
-                [
-                  opt(BaseId.Eurasia), opt(BaseId.MarinerValley), opt(BaseId.Ceres), opt(BaseId.Tycho),
-                  opt(BaseId.Eros), opt(BaseId.Thoth), opt(BaseId.Europa), opt(BaseId.Rhea),
-                ],
-                [
-                  opt(BaseId.Africa), opt(BaseId.LondresNova), nullopt, nullopt,
-                  nullopt, nullopt, opt(BaseId.Ganymede), opt(BaseId.Titan),
-                ],
-              ]
-                .map((row, iRow) =>
-                  <tr key={iRow}>
-                    {
-                      row.map((b, iCol) => {
-                        if (!b.hasValue) return <td key={iCol} />;
-                        const base = bases[b.value];
-                        const fleets = gameState.board.fleets[base?.orbital ?? 0];
-                        const influence = gameState.board.influence[b.value];
-                        if (
-                          base === undefined
-                          || fleets === undefined
-                          || influence === undefined
-                        ) return <td key={iCol} />;
-
-                        const orbitalControlBonus = map2(players, p => fleets[p.id] > fleets[p.opposite] && influence[p.id] != 0 ? 1 : 0);
-                        const power = map2(orbitalControlBonus, (bonus, p) => influence[p] + bonus);
-
-                        const baseDecision = optMap(continuationsDecision, decision => ({
-                          player: decision.player,
-                          continuation: decision.actions.clickBase[b.value] ?? nullopt,
-                        }));
-                        return <td
-                          key={iCol}
-                          style={{
-                            border:
-                              (power[0] > power[1])
-                                ? "medium dashed red"
-                                : (power[1] > power[0])
-                                  ? "medium dashed blue"
-                                  : "medium dashed gray",
-                            verticalAlign: "top",
-                          }}
-                          onClick={() => {
-                            if (baseDecision.hasValue && baseDecision.value.player != modelPlayer && baseDecision.value.continuation.hasValue) {
-                              setGameState(baseDecision.value.continuation.value);
-                            }
-                          }}
-                        >
-                          <div style={{ fontSize: 16 }}>{base.name}</div>
-                          <div>
-                            {
-                              players.map(player =>
-                                <span key={player.id}>
-                                  {
-                                    (
-                                      continuationsDecision.hasValue
-                                        ? continuationsDecision.value.actions.clickInfluence[b.value]?.[player.id]?.map(cOpt => optMap(cOpt, continuation => ({
-                                          player: continuationsDecision.value.player,
-                                          continuation
-                                        }))) ?? []
-                                        : []
-                                    )
-                                      .padRight({ toLength: influence[player.id], getPadElement: () => nullopt })
-                                      .map((influenceDecision, iInfluence) =>
-                                        <span
-                                          key={iInfluence}
-                                          style={(() => {
-                                            if (
-                                              (
-                                                gameState.phase.phase === "ap turn initiative event"
-                                                || gameState.phase.phase === "event turn event"
-                                                || gameState.phase.phase === "score turn kept event"
-                                              )
-                                              && gameState.phase.focus === EventId.CovertOp
-                                              && gameState.phase.selectedInfluence.hasValue
-                                              && gameState.phase.selectedInfluence.value.base === base.id
-                                              && gameState.phase.selectedInfluence.value.player === player.id
-                                              && iInfluence == 0
-                                            ) {
-                                              return { background: "yellow" };
-                                            }
-                                            return undefined;
-                                          })()}
-                                          onClick={() => {
-                                            if (influenceDecision.hasValue && influenceDecision.value.player != modelPlayer) {
-                                              setGameState(influenceDecision.value.continuation);
-                                            }
-                                          }}
-                                        >
-                                          {player.id === PlayerId.MCR ? "🎴" : "🌐"}
-                                        </span>
-                                      )
-                                  }
-                                  <span>{"🪐".repeat(orbitalControlBonus[player.id])}</span>
-                                  {player.id == players.length - 1 ? undefined : <span style={{ fontSize: 8 }}>{power[0] != 0 && power[1] != 0 ? "⚔️" : ""}</span>}
-                                </span>)
-                            }
-                          </div>
-                        </td>
-                      })
-                    }
-                  </tr>
-                )
-            }
-          </tbody></table>
+            </tbody></table>
+          </div>
         </div>
       </div>
     </div >

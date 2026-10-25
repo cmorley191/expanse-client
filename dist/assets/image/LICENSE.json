@@ -1,0 +1,50 @@
+{
+  "Blue_Marble_2002.png": {
+    "license": "public domain",
+    "source": "https://en.wikipedia.org/wiki/File:Blue_Marble_2002.png"
+  },
+  "Solarsystemscope_texture_8k_mars.jpg": {
+    "license": "CC-BY-4.0",
+    "author": "https://commons.wikimedia.org/wiki/User:Cmglee",
+    "source": "https://commons.wikimedia.org/wiki/File:Solarsystemscope_texture_8k_mars.jpg"
+  },
+  "Cylindrical_Map_of_Venus.jpg": {
+    "license": "public domain",
+    "source": "https://commons.wikimedia.org/wiki/File:Cylindrical_Map_of_Venus.jpg"
+  },
+  "Mercury_-_complete_mono_basemap_2500mpp_equirectangular.png": {
+    "license": "public domain",
+    "source": "https://commons.wikimedia.org/wiki/File:Mercury_-_complete_mono_basemap_2500mpp_equirectangular.png"
+  },
+  "Solarsystemscope_texture_4k_ceres_fictional.jpg": {
+    "license": "CC-BY-4.0",
+    "author": "https://commons.wikimedia.org/wiki/User:Cmglee",
+    "source": "https://commons.wikimedia.org/wiki/File:Solarsystemscope_texture_4k_ceres_fictional.jpg"
+  },
+  "Vesta_map_for_GeoHack.png": {
+    "license": "public domain",
+    "source": "https://commons.wikimedia.org/wiki/File:Vesta_map_for_GeoHack.png"
+  },
+  "20150529_eros_map.jpg": {
+    "license": "CC-BY-3.0",
+    "author": "USGS / Phil Stooke, University of Western Ontario / https://www.planetary.org/profiles/phil-stooke",
+    "source": "https://www.planetary.org/space-images/map-of-eros",
+    "direct": "https://planetary.s3.amazonaws.com/web/assets/pictures/_1200x600_crop_center-center_82_line/80068/20150529_eros_map.jpg.webp",
+    "modified": "labels blurred out by Charlie Morley 20261023; same license"
+  },
+  "Solarsystemscope_texture_2k_jupiter.jpg": {
+    "license": "CC-BY-4.0",
+    "author": "https://commons.wikimedia.org/wiki/User:Cmglee",
+    "source": "https://commons.wikimedia.org/wiki/File:Solarsystemscope_texture_2k_jupiter.jpg"
+  },
+  "Solarsystemscope_texture_2k_saturn.jpg": {
+    "license": "CC-BY-4.0",
+    "author": "https://commons.wikimedia.org/wiki/User:Cmglee",
+    "source": "https://commons.wikimedia.org/wiki/File:Solarsystemscope_texture_2k_saturn.jpg"
+  },
+  "tycho.png": {
+    "license": "public domain",
+    "author": "Charlie Morley 20261023",
+    "source": "this project"
+  }
+}
