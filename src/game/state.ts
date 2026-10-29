@@ -1478,33 +1478,28 @@ export function getContinuations(oldState: GameState): GameStateContinuations {
             ...defaultContinuationActions,
 
             clickKeptCard: defaultContinuationActions.clickKeptCard.with(oldPhase.assassinAction, oldState.board.kept[oldPhase.assassinAction].map(kept =>
-              (
-                kept === EventId.MaoKwik
-                || kept === EventId.Miller
-              )
-                ? nullopt
-                : opt(
+              opt(
+                (
                   (
-                    (
-                      oldPhase.assassinAction == eventPlayer
-                      && oldState.board.kept[players[oldPhase.assassinAction].opposite].length > 0
-                    )
-                      ? identity
-                      : endEventContinuation
-                  )({
-                    state: {
-                      ...oldState,
-                      board: {
-                        ...oldState.board,
-                        kept: withMap2(oldState.board.kept, oldPhase.assassinAction, filterKept => filterKept.filter(k => k != kept))
-                      },
-                      phase: {
-                        ...oldPhase,
-                        assassinAction: players[oldPhase.assassinAction].opposite,
-                      },
+                    oldPhase.assassinAction == eventPlayer
+                    && oldState.board.kept[players[oldPhase.assassinAction].opposite].length > 0
+                  )
+                    ? identity
+                    : endEventContinuation
+                )({
+                  state: {
+                    ...oldState,
+                    board: {
+                      ...oldState.board,
+                      kept: withMap2(oldState.board.kept, oldPhase.assassinAction, filterKept => filterKept.filter(k => k != kept))
                     },
-                    turnsComplete: [],
-                  })))),
+                    phase: {
+                      ...oldPhase,
+                      assassinAction: players[oldPhase.assassinAction].opposite,
+                    },
+                  },
+                  turnsComplete: [],
+                })))),
           },
         }),
       };

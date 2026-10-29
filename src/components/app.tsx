@@ -114,6 +114,7 @@ const bodyMeta: {
   semiMinorAU: number,
   orbitRotationOffset: number,
   orbitStartOffset: number,
+  important: boolean,
   render:
   & { radiusAU: number }
   & (
@@ -126,7 +127,8 @@ const bodyMeta: {
       semiMajorAU: 0.387,
       semiMinorAU: 0.378,
       orbitRotationOffset: 0.508,
-      orbitStartOffset: 0.0,
+      orbitStartOffset: 0.6,
+      important: false,
       render: {
         radiusAU: 0.29 * radiusScale,
         type: "sphere",
@@ -139,7 +141,8 @@ const bodyMeta: {
       semiMajorAU: 0.723,
       semiMinorAU: 0.722,
       orbitRotationOffset: 0.958,
-      orbitStartOffset: 0.0,
+      orbitStartOffset: 0.1,
+      important: false,
       render: {
         radiusAU: 0.35 * radiusScale,
         type: "sphere",
@@ -152,7 +155,8 @@ const bodyMeta: {
       semiMajorAU: 1.000,
       semiMinorAU: 1.000,
       orbitRotationOffset: 1.796,
-      orbitStartOffset: 0.45,
+      orbitStartOffset: 0.35,
+      important: true,
       render: {
         radiusAU: 0.37 * radiusScale,
         type: "sphere",
@@ -165,7 +169,8 @@ const bodyMeta: {
       semiMajorAU: 1.524,
       semiMinorAU: 1.517,
       orbitRotationOffset: 5.000,
-      orbitStartOffset: 0.0,
+      orbitStartOffset: 0.25,
+      important: true,
       render: {
         radiusAU: 0.31 * radiusScale,
         type: "sphere",
@@ -179,6 +184,7 @@ const bodyMeta: {
       semiMinorAU: 2.757,
       orbitRotationOffset: 1.284,
       orbitStartOffset: 0.68,
+      important: true,
       render: {
         radiusAU: 0.18 * radiusScale,
         type: "sphere",
@@ -191,7 +197,8 @@ const bodyMeta: {
       semiMajorAU: 2.362,
       semiMinorAU: 2.353,
       orbitRotationOffset: 2.647,
-      orbitStartOffset: 0.6,
+      orbitStartOffset: 0.2,
+      important: false,
       render: {
         radiusAU: 0.15 * radiusScale,
         type: "sphere",
@@ -205,6 +212,7 @@ const bodyMeta: {
       semiMinorAU: 2.631,
       orbitRotationOffset: 1.04,
       orbitStartOffset: 0.8,
+      important: true,
       render: {
         radiusAU: 0.11 * radiusScale,
         type: "static",
@@ -216,7 +224,8 @@ const bodyMeta: {
       semiMajorAU: 1.458,
       semiMinorAU: 1.421,
       orbitRotationOffset: 3.121,
-      orbitStartOffset: 0.3,
+      orbitStartOffset: 0.55,
+      important: true,
       render: {
         radiusAU: 0.15 * radiusScale,
         type: "sphere",
@@ -230,6 +239,7 @@ const bodyMeta: {
       semiMinorAU: 3.14,
       orbitRotationOffset: 3.90,
       orbitStartOffset: 0.35,
+      important: true,
       render: {
         radiusAU: 0.09 * radiusScale,
         type: "plate",
@@ -243,6 +253,7 @@ const bodyMeta: {
       semiMinorAU: 5.197,
       orbitRotationOffset: 4.787,
       orbitStartOffset: 0.15,
+      important: true,
       render: {
         radiusAU: 0.67 * radiusScale,
         type: "sphere",
@@ -256,6 +267,7 @@ const bodyMeta: {
       semiMinorAU: 9.523,
       orbitRotationOffset: 5.915,
       orbitStartOffset: 0.03,
+      important: true,
       render: {
         radiusAU: 0.57 * radiusScale,
         type: "sphere",
@@ -349,7 +361,7 @@ function Game({ model }: GameProps) {
   const [turnHistory, setTurnHistory] = React.useState<TurnHistoryItem[]>([]);
 
   const maxHistoryLength = (NONSCORES_PER_PILE + SCORES_PER_PILE) * PILES;
-  const [minDaysPerTurn, maxDaysPerTurn] = [5, 7];
+  const [minDaysPerTurn, maxDaysPerTurn] = [5, 9];
   const startDate = new Date(
     new Date().getTime()
     + 300 * 365.25 * 24 * 60 * 60 * 1000
@@ -1351,18 +1363,20 @@ function Game({ model }: GameProps) {
 
             const width = ctx.canvas.clientWidth;
             const height = ctx.canvas.clientHeight;
+            const sunX = width * 0.60;
+            const sunY = height * 0.5;
 
-            const systemRadiusAU = 11.5;
+            const systemRadiusAU = 15.5;
             const systemRotation = 0.2;
-            const scalePower = 0.5;
+            const scalePower = 0.63;
 
             ctx.clearRect(0, 0, width, height);
 
             ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, width, height);
 
-            const sunRadius = 1.0 * radiusScale / systemRadiusAU * width / 2;
-            ctx.ellipse(width / 2, height / 2, sunRadius, sunRadius, 0, 0, Math.PI * 2);
+            const sunRadius = 0.9 * radiusScale / systemRadiusAU * width / 2;
+            ctx.ellipse(sunX, sunY, sunRadius, sunRadius, 0, 0, Math.PI * 2);
             ctx.fillStyle = '#ffff00';
             ctx.fill();
 
@@ -1375,14 +1389,14 @@ function Game({ model }: GameProps) {
 
               ctx.beginPath();
               ctx.ellipse(
-                width / 2 + centerOffset * Math.cos(rotation),
-                height / 2 + centerOffset * Math.sin(rotation),
+                sunX + centerOffset * Math.cos(rotation),
+                sunY + centerOffset * Math.sin(rotation),
                 Math.pow(body.meta.semiMajorAU / systemRadiusAU, scalePower) * width / 2,
                 Math.pow(body.meta.semiMinorAU / systemRadiusAU, scalePower) * width / 2,
                 rotation,
                 0,
                 Math.PI * 2);
-              ctx.strokeStyle = '#dddddd';
+              ctx.strokeStyle = body.meta.important ? '#dddddd' : '#181818';
               ctx.stroke();
               ctx.closePath();
 
@@ -1414,11 +1428,8 @@ function Game({ model }: GameProps) {
               y = r * Math.sin(theta);
               x += centerOffset * Math.cos(rotation);
               y += centerOffset * Math.sin(rotation);
-              x += width / 2
-              y += height / 2
-
-              //ctx.fillStyle = '#ffffff';
-              //ctx.fillRect(x, y, 20, 20);
+              x += sunX
+              y += sunY
 
               const image = body.image;
               if (image.loaded === false) return;
@@ -1441,7 +1452,7 @@ function Game({ model }: GameProps) {
                 ctx.arc(x, y, radius, 0, Math.PI * 2);
                 ctx.clip();
 
-                const maskX = -radius * Math.tan(theta + Math.PI / 2);
+                const maskX = radius * (x - sunX) / Math.sign(y - sunY) / Math.max(0.01, Math.abs(y - sunY));
 
                 const gradientRadius = Math.sqrt(maskX * maskX + radius * radius);
                 const gradient = ctx.createRadialGradient(
@@ -1449,7 +1460,7 @@ function Game({ model }: GameProps) {
                   x + maskX, y, gradientRadius * 2
                 );
 
-                if (theta % (Math.PI * 2) < Math.PI) {
+                if (y > sunY) {
                   gradient.addColorStop(0, 'rgba(0, 0, 0, 0.98)');
                   gradient.addColorStop(0.5 - 0.05 * radius / gradientRadius, 'rgba(0, 0, 0, 0.98)');
                   gradient.addColorStop(0.5 + 0.1 * radius / gradientRadius, 'rgba(0, 0, 0, 0.0)');
