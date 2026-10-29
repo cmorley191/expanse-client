@@ -163,7 +163,7 @@ const bodyMeta: {
       semiMajorAU: 1.000,
       semiMinorAU: 1.000,
       orbitRotationOffset: 1.796,
-      orbitStartOffset: 0.8,
+      orbitStartOffset: 0.35,
       important: true,
       render: {
         radiusAU: 0.37 * radiusScale,
