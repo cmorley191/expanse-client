@@ -107,7 +107,7 @@ export function Canvas({ draw, ...rest }: CanvasProps) {
   return <motion.canvas ref={canvasRef} {...rest} />;
 };
 
-const radiusScale = 0.5;
+const radiusScale = 0.62;
 const bodyMeta: {
   name: string,
   semiMajorAU: number,
@@ -1408,6 +1408,8 @@ function Game({ model }: GameProps) {
               let r = Math.sqrt(x * x + y * y)
               let theta = Math.atan2(y, x);
               theta += rotation;
+              theta += Math.PI * 10;
+              theta %= Math.PI * 2;
               x = r * Math.cos(theta);
               y = r * Math.sin(theta);
               x += centerOffset * Math.cos(rotation);
@@ -1428,10 +1430,38 @@ function Game({ model }: GameProps) {
                 const slideSign = body.meta.render.periodD > 0 ? -1 : 1;
                 ctx.save();
                 ctx.beginPath();
-                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.arc(x, y, radius * 0.95, 0, Math.PI * 2);
                 ctx.clip();
                 ctx.drawImage(image.image, x - radius - slideSign * slideX, y - radius, width, radius * 2);
                 ctx.drawImage(image.image, x - radius + slideSign * (width - slideX), y - radius, width, radius * 2);
+                ctx.restore()
+
+                ctx.save()
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.clip();
+
+                const maskX = -radius * Math.tan(theta + Math.PI / 2);
+
+                const gradientRadius = Math.sqrt(maskX * maskX + radius * radius);
+                const gradient = ctx.createRadialGradient(
+                  x + maskX, y, 0,
+                  x + maskX, y, gradientRadius * 2
+                );
+
+                if (theta % (Math.PI * 2) < Math.PI) {
+                  gradient.addColorStop(0, 'rgba(0, 0, 0, 0.98)');
+                  gradient.addColorStop(0.5 - 0.05 * radius / gradientRadius, 'rgba(0, 0, 0, 0.98)');
+                  gradient.addColorStop(0.5 + 0.1 * radius / gradientRadius, 'rgba(0, 0, 0, 0.0)');
+                } else {
+                  gradient.addColorStop(0, 'rgba(0, 0, 0, 0.0)');
+                  gradient.addColorStop(0.5 - 0.1 * radius / gradientRadius, 'rgba(0, 0, 0, 0.0)');
+                  gradient.addColorStop(0.5 + 0.05 * radius / gradientRadius, 'rgba(0, 0, 0, 0.95)');
+                }
+
+                ctx.fillStyle = gradient;
+                ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+
                 ctx.restore();
               }
               else if (body.meta.render.type === "plate") {
