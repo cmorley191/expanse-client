@@ -116,9 +116,15 @@ const bodyMeta: {
   orbitStartOffset: number,
   important: boolean,
   render:
-  & { radiusAU: number }
+  & { radiusAU: number, imageName: string }
   & (
-    | { type: "sphere" | "plate", periodD: number, imageName: string }
+    | (
+      & { periodD: number }
+      & (
+        { type: "sphere", nightImageName: Optional<string> }
+        | { type: "plate" }
+      )
+    )
     | { type: "static", imageName: string }
   ),
 }[] = [
@@ -134,6 +140,7 @@ const bodyMeta: {
         type: "sphere",
         periodD: 58.65,
         imageName: "assets/image/Mercury_-_complete_mono_basemap_2500mpp_equirectangular.png",
+        nightImageName: nullopt,
       },
     },
     {
@@ -148,6 +155,7 @@ const bodyMeta: {
         type: "sphere",
         periodD: -243.02,
         imageName: "assets/image/Cylindrical_Map_of_Venus.jpg",
+        nightImageName: nullopt,
       },
     },
     {
@@ -155,13 +163,14 @@ const bodyMeta: {
       semiMajorAU: 1.000,
       semiMinorAU: 1.000,
       orbitRotationOffset: 1.796,
-      orbitStartOffset: 0.35,
+      orbitStartOffset: 0.8,
       important: true,
       render: {
         radiusAU: 0.37 * radiusScale,
         type: "sphere",
         periodD: 0.997,
         imageName: "assets/image/Blue_Marble_2002.png",
+        nightImageName: opt("assets/image/BlackMarble_2016_01deg_gray.jpg"),
       },
     },
     {
@@ -176,6 +185,7 @@ const bodyMeta: {
         type: "sphere",
         periodD: 1.026,
         imageName: "assets/image/Solarsystemscope_texture_8k_mars.jpg",
+        nightImageName: nullopt,
       },
     },
     {
@@ -190,6 +200,7 @@ const bodyMeta: {
         type: "sphere",
         periodD: 0.378,
         imageName: "assets/image/Solarsystemscope_texture_4k_ceres_fictional.jpg",
+        nightImageName: nullopt,
       },
     },
     {
@@ -204,6 +215,7 @@ const bodyMeta: {
         type: "sphere",
         periodD: 0.223,
         imageName: "assets/image/Vesta_map_for_GeoHack.png",
+        nightImageName: nullopt,
       },
     },
     {
@@ -231,6 +243,7 @@ const bodyMeta: {
         type: "sphere",
         periodD: 0.220,
         imageName: "assets/image/20150529_eros_map.jpg",
+        nightImageName: nullopt,
       },
     },
     {
@@ -259,6 +272,7 @@ const bodyMeta: {
         type: "sphere",
         periodD: 0.414,
         imageName: "assets/image/Solarsystemscope_texture_2k_jupiter.jpg",
+        nightImageName: nullopt,
       },
     },
     {
@@ -273,6 +287,7 @@ const bodyMeta: {
         type: "sphere",
         periodD: 0.444,
         imageName: "assets/image/Solarsystemscope_texture_2k_saturn.jpg",
+        nightImageName: nullopt,
       },
     },
   ];
@@ -444,6 +459,7 @@ function Game({ model }: GameProps) {
   const bodies = useLazyRef(() =>
     bodyMeta.map((meta, iBody) => ({
       meta,
+
       image: (() => {
         const image = new Image();
         image.src = meta.render.imageName;
@@ -459,6 +475,31 @@ function Game({ model }: GameProps) {
           })));
         }
         return ({
+          image,
+          loaded: false,
+        });
+      })(),
+
+      nightImage: (() => {
+        if (!(
+          meta.render.type === "sphere"
+          && meta.render.nightImageName.hasValue
+        )) return nullopt;
+        const src = meta.render.nightImageName.value;
+        const image = new Image();
+        image.src = src;
+        image.onload = () => {
+          console.log(`Loaded ${src}`);
+          if (bodies.current.hasValue === false) throw `image load before bodies init finishes`;
+          bodies.current = opt(bodies.current.value.withMap(iBody, b => ({
+            ...b,
+            nightImage: opt({
+              image,
+              loaded: true,
+            }),
+          })));
+        }
+        return opt({
           image,
           loaded: false,
         });
@@ -1432,7 +1473,8 @@ function Game({ model }: GameProps) {
               y += sunY
 
               const image = body.image;
-              if (image.loaded === false) return;
+              const nightImage = body.nightImage;
+              if (image.loaded === false || (nightImage.hasValue && nightImage.value.loaded === false)) return;
 
               const radius = body.meta.render.radiusAU / systemRadiusAU * width / 2;
               if (body.meta.render.type === "sphere") {
@@ -1460,18 +1502,27 @@ function Game({ model }: GameProps) {
                   x + maskX, y, gradientRadius * 2
                 );
 
+                const darknessOpacity = nightImage.hasValue ? 1.0 : 0.98;
                 if (y > sunY) {
-                  gradient.addColorStop(0, 'rgba(0, 0, 0, 0.98)');
-                  gradient.addColorStop(0.5 - 0.05 * radius / gradientRadius, 'rgba(0, 0, 0, 0.98)');
+                  gradient.addColorStop(0, `rgba(0, 0, 0, ${darknessOpacity})`);
+                  gradient.addColorStop(0.5 - 0.05 * radius / gradientRadius, `rgba(0, 0, 0, ${darknessOpacity})`);
                   gradient.addColorStop(0.5 + 0.1 * radius / gradientRadius, 'rgba(0, 0, 0, 0.0)');
                 } else {
                   gradient.addColorStop(0, 'rgba(0, 0, 0, 0.0)');
                   gradient.addColorStop(0.5 - 0.1 * radius / gradientRadius, 'rgba(0, 0, 0, 0.0)');
-                  gradient.addColorStop(0.5 + 0.05 * radius / gradientRadius, 'rgba(0, 0, 0, 0.95)');
+                  gradient.addColorStop(0.5 + 0.05 * radius / gradientRadius, `rgba(0, 0, 0, ${darknessOpacity})`);
                 }
+
+                ctx.globalCompositeOperation = 'destination-out';
 
                 ctx.fillStyle = gradient;
                 ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+
+                if (nightImage.hasValue) {
+                  ctx.globalCompositeOperation = 'destination-over';
+                  ctx.drawImage(nightImage.value.image, x - radius - slideSign * slideX, y - radius, width, radius * 2);
+                  ctx.drawImage(nightImage.value.image, x - radius + slideSign * (width - slideX), y - radius, width, radius * 2);
+                }
 
                 ctx.restore();
               }

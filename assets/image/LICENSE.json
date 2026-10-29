@@ -3,6 +3,12 @@
     "license": "public domain",
     "source": "https://en.wikipedia.org/wiki/File:Blue_Marble_2002.png"
   },
+  "BlackMarble_2016_01deg_gray.jpg": {
+    "license": "public domain",
+    "source": "https://science.nasa.gov/earth/earth-observatory/earth-at-night/maps/",
+    "direct": "https://assets.science.nasa.gov/content/dam/science/esd/eo/images/imagerecords/144000/144897/BlackMarble_2016_01deg_gray.jpg",
+    "modified": "contrast increased by Charlie Morley 20261029; same license"
+  },
   "Solarsystemscope_texture_8k_mars.jpg": {
     "license": "CC-BY-4.0",
     "author": "https://commons.wikimedia.org/wiki/User:Cmglee",
