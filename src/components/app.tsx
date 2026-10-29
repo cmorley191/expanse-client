@@ -426,7 +426,7 @@ function Game({ model }: GameProps) {
                 );
 
                 const idleSpeed = (
-                  3 * 60 * 1000 // 3 minutes
+                  5 * 60 * 1000 // 5 minutes
                   / (1000) // per second
                 ) * (
                     (drawTimes.value.targetCheckpoint.drawTimeMs - drawTimes.value.lastCheckpoint.drawTimeMs)
@@ -1043,8 +1043,9 @@ function Game({ model }: GameProps) {
 
                                 const clockRadius = width * 0.3
 
-                                ctx.strokeStyle = '#bbbbbb';
+                                const strokeOpacity = 0.75;
 
+                                ctx.strokeStyle = `rgba(255, 255, 255, ${strokeOpacity})`;
                                 ctx.beginPath();
                                 ctx.arc(width / 2, width / 2, clockRadius, 0, Math.PI * 2);
                                 ctx.stroke();
@@ -1085,9 +1086,11 @@ function Game({ model }: GameProps) {
                                   % 1
                                 );
                                 const minutesRadius = clockRadius * 0.8;
+                                ctx.strokeStyle = `rgba(255, 255, 255, ${strokeOpacity * 0.6})`;
                                 ctx.beginPath();
                                 ctx.moveTo(width / 2, width / 2);
                                 ctx.lineTo(width / 2 + Math.cos(minutesAngle) * minutesRadius, width / 2 + Math.sin(minutesAngle) * minutesRadius);
+
                                 ctx.stroke();
                                 ctx.closePath();
                               }, [])}
@@ -1428,19 +1431,6 @@ function Game({ model }: GameProps) {
               const eccentricity = Math.sqrt(1 - semiMinor * semiMinor / semiMajor / semiMajor);
               let rotation = body.meta.orbitRotationOffset + systemRotation;
 
-              ctx.beginPath();
-              ctx.ellipse(
-                sunX + centerOffset * Math.cos(rotation),
-                sunY + centerOffset * Math.sin(rotation),
-                Math.pow(body.meta.semiMajorAU / systemRadiusAU, scalePower) * width / 2,
-                Math.pow(body.meta.semiMinorAU / systemRadiusAU, scalePower) * width / 2,
-                rotation,
-                0,
-                Math.PI * 2);
-              ctx.strokeStyle = body.meta.important ? '#dddddd' : '#181818';
-              ctx.stroke();
-              ctx.closePath();
-
               const orbitalPeriodD = Math.pow(body.meta.semiMajorAU, 1.5) * 365.26;
               const orbitT = currentSimTimeD / orbitalPeriodD + body.meta.orbitStartOffset;
               const meanAnomaly = Math.PI * 2 * orbitT;
@@ -1471,6 +1461,28 @@ function Game({ model }: GameProps) {
               y += centerOffset * Math.sin(rotation);
               x += sunX
               y += sunY
+
+              ctx.beginPath();
+              ctx.ellipse(
+                sunX + centerOffset * Math.cos(rotation),
+                sunY + centerOffset * Math.sin(rotation),
+                Math.pow(body.meta.semiMajorAU / systemRadiusAU, scalePower) * width / 2,
+                Math.pow(body.meta.semiMinorAU / systemRadiusAU, scalePower) * width / 2,
+                rotation,
+                0,
+                Math.PI * 2);
+              const orbitGradient = ctx.createConicGradient(
+                theta,
+                sunX + centerOffset * Math.cos(rotation),
+                sunY + centerOffset * Math.sin(rotation));
+              const orbitOpacity = (body.meta.important ? 0.9 : 0.2);
+              orbitGradient.addColorStop(0, `rgba(255, 255, 255, ${orbitOpacity * 0.05})`);
+              orbitGradient.addColorStop(Math.max(0, 1 - Math.pow(120 / orbitalPeriodD, 1.5)), `rgba(255, 255, 255, ${orbitOpacity * 0.12})`);
+              orbitGradient.addColorStop(1, `rgba(255, 255, 255, ${orbitOpacity})`);
+              orbitGradient.addColorStop(1, `rgba(255, 255, 255, ${orbitOpacity * 0.01})`);
+              ctx.strokeStyle = orbitGradient;
+              ctx.stroke();
+              ctx.closePath();
 
               const image = body.image;
               const nightImage = body.nightImage;
