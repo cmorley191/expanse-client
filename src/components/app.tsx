@@ -5,7 +5,7 @@ import { HTMLMotionProps, motion, Transition } from "motion/react";
 
 import { bands, BaseId, bases, Card, CardType, EventId, events, NONSCORES_PER_PILE, orbitals, PILES, PlayerId, players, SCORES_PER_PILE, sectors, TRACK_COUNT } from "../game/parameters";
 import { GameState, GameStateContinuation, GameStateContinuations, TurnHistoryItem } from "../game/state";
-import { assertType, getRandomInt, lerp, map2, satisfiesCheck, tuple2, unlerp } from "../core/misc";
+import { assertType, getRandomInt, lerp, map2, mapObject, satisfiesCheck, tuple2, unlerp } from "../core/misc";
 import { nullopt, opt, Optional, optMap, optValueOr, throwOnNullopt } from "../core/optional";
 import { ExpanseModel_Sirius, getStateContinuationsInputs } from "../game/model";
 import AnimatedEllipses from "./elements/animated_ellipses";
@@ -108,189 +108,507 @@ export function Canvas({ draw, ...rest }: CanvasProps) {
 };
 
 const radiusScale = 0.62;
+type BodyName =
+  | "Sun"
+  | "Mercury" | "Venus" | "Earth" | "Mars" | "Jupiter" | "Saturn"
+  | "Ceres" | "Vesta" | "Tycho" | "Eros" | "Thoth"
+  | "Europa" | "Ganymede" | "Io" | "Rhea" | "Titan"
+  | "Luna" | "Phobos" | "Deimos"
+  | "Callisto" | "Enceladus" | "Mimas" | "Iapetus" | "Dione" | "Tethys" | "Phoebe"
+  ;
+//const starsImageName = "assets/image/2k_stars_milky_way.jpg";
+//const sunImageName = "assets/image/2k_sun.jpg";
 const bodyMeta: {
-  name: string,
-  semiMajorAU: number,
-  semiMinorAU: number,
-  orbitRotationOffset: number,
-  orbitStartOffset: number,
-  important: boolean,
-  render:
-  & { radiusAU: number, imageName: string }
-  & (
-    | (
-      & { periodD: number }
-      & (
-        { type: "sphere", nightImageName: Optional<string> }
-        | { type: "plate" }
+  [K in Exclude<BodyName, "Sun">]: {
+    parentName: BodyName,
+    semiMajorAU: number,
+    semiMinorAU: number,
+    orbitRotationOffset: number,
+    orbitStartOffset: number,
+    orbitRetrograde: boolean,
+    childOrbitScale: number,
+    massSols: number,
+    important: boolean,
+    render:
+    & { radiusAU: number, imageName: string }
+    & (
+      | (
+        & { periodD: number }
+        & (
+          { type: "sphere", nightImageName: Optional<string> }
+          | { type: "plate" }
+        )
       )
-    )
-    | { type: "static", imageName: string }
-  ),
-}[] = [
-    {
-      name: "Mercury",
-      semiMajorAU: 0.387,
-      semiMinorAU: 0.378,
-      orbitRotationOffset: 0.508,
-      orbitStartOffset: 0.6,
-      important: false,
-      render: {
-        radiusAU: 0.29 * radiusScale,
-        type: "sphere",
-        periodD: 58.65,
-        imageName: "assets/image/Mercury_-_complete_mono_basemap_2500mpp_equirectangular.png",
-        nightImageName: nullopt,
-      },
+      | { type: "static", imageName: string }
+    ),
+  }
+} = {
+  "Mercury": {
+    parentName: "Sun",
+    semiMajorAU: 0.387,
+    semiMinorAU: 0.378,
+    orbitRotationOffset: 1.352,
+    orbitStartOffset: 0.6,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 1.66e-7,
+    important: false,
+    render: {
+      radiusAU: 0.29 * radiusScale,
+      type: "sphere",
+      periodD: 58.65,
+      imageName: "assets/image/2k_mercury.jpg",
+      nightImageName: nullopt,
     },
-    {
-      name: "Venus",
-      semiMajorAU: 0.723,
-      semiMinorAU: 0.722,
-      orbitRotationOffset: 0.958,
-      orbitStartOffset: 0.1,
-      important: false,
-      render: {
-        radiusAU: 0.35 * radiusScale,
-        type: "sphere",
-        periodD: -243.02,
-        imageName: "assets/image/Cylindrical_Map_of_Venus.jpg",
-        nightImageName: nullopt,
-      },
+  },
+  "Venus": {
+    parentName: "Sun",
+    semiMajorAU: 0.723,
+    semiMinorAU: 0.722,
+    orbitRotationOffset: 2.296,
+    orbitStartOffset: 0.0,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 2.447e-6,
+    important: false,
+    render: {
+      radiusAU: 0.35 * radiusScale,
+      type: "sphere",
+      periodD: -4.1, // Venus has a retrograde rotation; also, while its surface rotates every 243.02 days, its densest cloud layer (the primarily visible part) is much faster ~4.1
+      imageName: "assets/image/2k_venus_atmosphere.jpg",
+      nightImageName: nullopt,
     },
-    {
-      name: "Earth",
-      semiMajorAU: 1.000,
-      semiMinorAU: 1.000,
-      orbitRotationOffset: 1.796,
-      orbitStartOffset: 0.35,
-      important: true,
-      render: {
-        radiusAU: 0.37 * radiusScale,
-        type: "sphere",
-        periodD: 0.997,
-        imageName: "assets/image/Blue_Marble_2002.png",
-        nightImageName: opt("assets/image/BlackMarble_2016_01deg_gray.jpg"),
-      },
+  },
+  "Earth": {
+    parentName: "Sun",
+    semiMajorAU: 1.000,
+    semiMinorAU: 0.999,
+    orbitRotationOffset: 1.797,
+    orbitStartOffset: 0.35,
+    orbitRetrograde: false,
+    childOrbitScale: 9,
+    massSols: 3.003e-6,
+    important: true,
+    render: {
+      radiusAU: 0.37 * radiusScale,
+      type: "sphere",
+      periodD: 0.997,
+      imageName: "assets/image/Blue_Marble_2002.png",
+      nightImageName: opt("assets/image/BlackMarble_2016_01deg_gray.jpg"),
     },
-    {
-      name: "Mars",
-      semiMajorAU: 1.524,
-      semiMinorAU: 1.517,
-      orbitRotationOffset: 5.000,
-      orbitStartOffset: 0.25,
-      important: true,
-      render: {
-        radiusAU: 0.31 * radiusScale,
-        type: "sphere",
-        periodD: 1.026,
-        imageName: "assets/image/Solarsystemscope_texture_8k_mars.jpg",
-        nightImageName: nullopt,
-      },
+  },
+  "Luna": {
+    parentName: "Earth",
+    semiMajorAU: 0.0026,
+    semiMinorAU: 0.0025,
+    orbitRotationOffset: 0,
+    orbitStartOffset: 0,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 3.691e-8,
+    important: false,
+    render: {
+      radiusAU: 0.24 * radiusScale,
+      type: "sphere",
+      periodD: 27.322,
+      imageName: "assets/image/2k_moon.jpg",
+      nightImageName: nullopt,
     },
-    {
-      name: "Ceres",
-      semiMajorAU: 2.766,
-      semiMinorAU: 2.757,
-      orbitRotationOffset: 1.284,
-      orbitStartOffset: 0.68,
-      important: true,
-      render: {
-        radiusAU: 0.18 * radiusScale,
-        type: "sphere",
-        periodD: 0.378,
-        imageName: "assets/image/Solarsystemscope_texture_4k_ceres_fictional.jpg",
-        nightImageName: nullopt,
-      },
+  },
+  "Mars": {
+    parentName: "Sun",
+    semiMajorAU: 1.524,
+    semiMinorAU: 1.517,
+    orbitRotationOffset: 5.865,
+    orbitStartOffset: 0.1,
+    orbitRetrograde: false,
+    childOrbitScale: 60,
+    massSols: 3.213e-7,
+    important: true,
+    render: {
+      radiusAU: 0.31 * radiusScale,
+      type: "sphere",
+      periodD: 1.026,
+      imageName: "assets/image/2k_mars.jpg",
+      nightImageName: nullopt,
     },
-    {
-      name: "Vesta",
-      semiMajorAU: 2.362,
-      semiMinorAU: 2.353,
-      orbitRotationOffset: 2.647,
-      orbitStartOffset: 0.2,
-      important: false,
-      render: {
-        radiusAU: 0.15 * radiusScale,
-        type: "sphere",
-        periodD: 0.223,
-        imageName: "assets/image/Vesta_map_for_GeoHack.png",
-        nightImageName: nullopt,
-      },
+  },
+  "Phobos": {
+    parentName: "Mars",
+    semiMajorAU: 0.0000627,
+    semiMinorAU: 0.0000626,
+    orbitRotationOffset: 0,
+    orbitStartOffset: 0.05,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 5.359e-15,
+    important: false,
+    render: {
+      radiusAU: 0.09 * radiusScale,
+      type: "sphere",
+      periodD: 0.319,
+      imageName: "assets/image/Phobos_Viking_Mosaic_DLRcontrol_7200.jpg",
+      nightImageName: nullopt,
     },
-    {
-      name: "Tycho",
-      semiMajorAU: 2.70,
-      semiMinorAU: 2.631,
-      orbitRotationOffset: 1.04,
-      orbitStartOffset: 0.8,
-      important: true,
-      render: {
-        radiusAU: 0.11 * radiusScale,
-        type: "static",
-        imageName: "assets/image/tycho.png",
-      }
+  },
+  "Deimos": {
+    parentName: "Mars",
+    semiMajorAU: 0.000157,
+    semiMinorAU: 0.000156,
+    orbitRotationOffset: 0,
+    orbitStartOffset: 0.23,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 7.421e-16,
+    important: false,
+    render: {
+      radiusAU: 0.06 * radiusScale,
+      type: "sphere",
+      periodD: 1.262,
+      imageName: "assets/image/deimos_texture_map_upd_2024__by_oleg_pluton_dcrr1qe-pre.jpg",
+      nightImageName: nullopt,
     },
-    {
-      name: "Eros",
-      semiMajorAU: 1.458,
-      semiMinorAU: 1.421,
-      orbitRotationOffset: 3.121,
-      orbitStartOffset: 0.55,
-      important: true,
-      render: {
-        radiusAU: 0.15 * radiusScale,
-        type: "sphere",
-        periodD: 0.220,
-        imageName: "assets/image/20150529_eros_map.jpg",
-        nightImageName: nullopt,
-      },
+  },
+  "Ceres": {
+    parentName: "Sun",
+    semiMajorAU: 2.767,
+    semiMinorAU: 2.759,
+    orbitRotationOffset: 2.665,
+    orbitStartOffset: 0.4,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 4.716e-10,
+    important: true,
+    render: {
+      radiusAU: 0.18 * radiusScale,
+      type: "sphere",
+      periodD: 0.378,
+      imageName: "assets/image/2k_ceres_fictional.jpg",
+      nightImageName: nullopt,
     },
-    {
-      name: "Thoth",
-      semiMajorAU: 3.15,
-      semiMinorAU: 3.14,
-      orbitRotationOffset: 3.90,
-      orbitStartOffset: 0.35,
-      important: true,
-      render: {
-        radiusAU: 0.09 * radiusScale,
-        type: "plate",
-        periodD: 0.01,
-        imageName: "assets/image/thoth.png",
-      },
+  },
+  "Vesta": {
+    parentName: "Sun",
+    semiMajorAU: 2.362,
+    semiMinorAU: 2.353,
+    orbitRotationOffset: 4.440,
+    orbitStartOffset: 0.95,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 1.302e-10,
+    important: false,
+    render: {
+      radiusAU: 0.15 * radiusScale,
+      type: "sphere",
+      periodD: 0.223,
+      imageName: "assets/image/Vesta_map_for_GeoHack.png",
+      nightImageName: nullopt,
     },
-    {
-      name: "Jupiter",
-      semiMajorAU: 5.203,
-      semiMinorAU: 5.197,
-      orbitRotationOffset: 4.787,
-      orbitStartOffset: 0.15,
-      important: true,
-      render: {
-        radiusAU: 0.67 * radiusScale,
-        type: "sphere",
-        periodD: 0.414,
-        imageName: "assets/image/Solarsystemscope_texture_2k_jupiter.jpg",
-        nightImageName: nullopt,
-      },
+  },
+  "Tycho": {
+    parentName: "Sun",
+    semiMajorAU: 2.70,
+    semiMinorAU: 2.631,
+    orbitRotationOffset: 1.04,
+    orbitStartOffset: 0.8,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 1e-20,
+    important: true,
+    render: {
+      radiusAU: 0.11 * radiusScale,
+      type: "static",
+      imageName: "assets/image/tycho.png",
     },
-    {
-      name: "Saturn",
-      semiMajorAU: 9.537,
-      semiMinorAU: 9.523,
-      orbitRotationOffset: 5.915,
-      orbitStartOffset: 0.03,
-      important: true,
-      render: {
-        radiusAU: 0.57 * radiusScale,
-        type: "sphere",
-        periodD: 0.444,
-        imageName: "assets/image/Solarsystemscope_texture_2k_saturn.jpg",
-        nightImageName: nullopt,
-      },
+  },
+  "Eros": {
+    parentName: "Sun",
+    semiMajorAU: 1.458,
+    semiMinorAU: 1.421,
+    orbitRotationOffset: 3.187,
+    orbitStartOffset: 0.5,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 3.362e-15,
+    important: true,
+    render: {
+      radiusAU: 0.10 * radiusScale,
+      type: "sphere",
+      periodD: 0.220,
+      imageName: "assets/image/20150529_eros_map.jpg",
+      nightImageName: nullopt,
     },
-  ];
+  },
+  "Thoth": {
+    parentName: "Sun",
+    semiMajorAU: 3.15,
+    semiMinorAU: 3.14,
+    orbitRotationOffset: 3.90,
+    orbitStartOffset: 0.4,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 1e-20,
+    important: true,
+    render: {
+      radiusAU: 0.09 * radiusScale,
+      type: "plate",
+      periodD: 0.02,
+      imageName: "assets/image/thoth.png",
+    },
+  },
+  "Jupiter": {
+    parentName: "Sun",
+    semiMajorAU: 5.203,
+    semiMinorAU: 5.197,
+    orbitRotationOffset: 0.25,
+    orbitStartOffset: 0.88,
+    orbitRetrograde: false,
+    childOrbitScale: 9,
+    massSols: 9.542e-4,
+    important: true,
+    render: {
+      radiusAU: 0.67 * radiusScale,
+      type: "sphere",
+      periodD: 0.414,
+      imageName: "assets/image/2k_jupiter.jpg",
+      nightImageName: nullopt,
+    },
+  },
+  "Europa": {
+    parentName: "Jupiter",
+    semiMajorAU: 0.0045,
+    semiMinorAU: 0.0044,
+    orbitRotationOffset: 0,
+    orbitStartOffset: 0.29,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 2.413e-8,
+    important: true,
+    render: {
+      radiusAU: 0.23 * radiusScale,
+      type: "sphere",
+      periodD: 3.551,
+      imageName: "https://bjj.mmedia.is/data/europa/europa_m.jpg",
+      nightImageName: nullopt,
+    },
+  },
+  "Ganymede": {
+    parentName: "Jupiter",
+    semiMajorAU: 0.0072,
+    semiMinorAU: 0.0071,
+    orbitRotationOffset: 0,
+    orbitStartOffset: 0.25,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 7.446e-8,
+    important: true,
+    render: {
+      radiusAU: 0.29 * radiusScale,
+      type: "sphere",
+      periodD: 7.155,
+      imageName: "https://bjj.mmedia.is/data/ganymede/ganymede_m.jpg",
+      nightImageName: nullopt,
+    },
+  },
+  "Io": {
+    parentName: "Jupiter",
+    semiMajorAU: 0.0028,
+    semiMinorAU: 0.0027,
+    orbitRotationOffset: 0,
+    orbitStartOffset: 0.93,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 4.491e-8,
+    important: false,
+    render: {
+      radiusAU: 0.24 * radiusScale,
+      type: "sphere",
+      periodD: 1.769,
+      imageName: "https://bjj.mmedia.is/data/io/io_m.jpg",
+      nightImageName: nullopt,
+    },
+  },
+  "Callisto": {
+    parentName: "Jupiter",
+    semiMajorAU: 0.0126,
+    semiMinorAU: 0.0125,
+    orbitRotationOffset: 0,
+    orbitStartOffset: 0.55,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 5.410e-8,
+    important: false,
+    render: {
+      radiusAU: 0.29 * radiusScale,
+      type: "sphere",
+      periodD: 16.689,
+      imageName: "https://bjj.mmedia.is/data/callisto/callisto_m.jpg",
+      nightImageName: nullopt,
+    },
+  },
+  "Saturn": {
+    parentName: "Sun",
+    semiMajorAU: 9.537,
+    semiMinorAU: 9.525,
+    orbitRotationOffset: 1.615,
+    orbitStartOffset: 0.735,
+    orbitRetrograde: false,
+    childOrbitScale: 11,
+    massSols: 2.857e-4,
+    important: true,
+    render: {
+      radiusAU: 0.57 * radiusScale,
+      type: "sphere",
+      periodD: 0.444,
+      imageName: "assets/image/2k_saturn.jpg",
+      nightImageName: nullopt,
+    },
+  },
+  "Rhea": {
+    parentName: "Saturn",
+    semiMajorAU: 0.0035,
+    semiMinorAU: 0.0034,
+    orbitRotationOffset: 0,
+    orbitStartOffset: 0.94,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 1.159e-9,
+    important: true,
+    render: {
+      radiusAU: 0.22 * radiusScale,
+      type: "sphere",
+      periodD: 4.518,
+      imageName: "https://bjj.mmedia.is/data/rhea/rhea_a_m.jpg",
+      nightImageName: nullopt,
+    },
+  },
+  "Titan": {
+    parentName: "Saturn",
+    semiMajorAU: 0.0082,
+    semiMinorAU: 0.0081,
+    orbitRotationOffset: 0,
+    orbitStartOffset: 0.25,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 6.762e-8,
+    important: true,
+    render: {
+      radiusAU: 0.29 * radiusScale,
+      type: "sphere",
+      periodD: 15.945, // while Titan's cloud rotations vary, the general haze (which is what you would mostly see) is probably roughly the same as its surface rotation on average
+      imageName: "assets/image/sat6fss1.jpg",
+      nightImageName: nullopt,
+    },
+  },
+  "Iapetus": {
+    parentName: "Saturn",
+    semiMajorAU: 0.0238 * 0.5, // outlier among saturn's moons
+    semiMinorAU: 0.0237 * 0.5,
+    orbitRotationOffset: 0,
+    orbitStartOffset: 0.8,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 9.075e-10,
+    important: false,
+    render: {
+      radiusAU: 0.21 * radiusScale,
+      type: "sphere",
+      periodD: 79.322,
+      imageName: "assets/image/Iapetus_May_2008_PIA11116_moon_only.jpg",
+      nightImageName: nullopt,
+    },
+  },
+  "Dione": {
+    parentName: "Saturn",
+    semiMajorAU: 0.0025,
+    semiMinorAU: 0.0024,
+    orbitRotationOffset: 0,
+    orbitStartOffset: 0.86,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 5.505e-10,
+    important: false,
+    render: {
+      radiusAU: 0.20 * radiusScale,
+      type: "sphere",
+      periodD: 2.737,
+      imageName: "assets/image/PIA12577_fig1.jpg",
+      nightImageName: nullopt,
+    },
+  },
+  "Tethys": {
+    parentName: "Saturn",
+    semiMajorAU: 0.0020,
+    semiMinorAU: 0.0019,
+    orbitRotationOffset: 0,
+    orbitStartOffset: 0.09,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 3.104e-10,
+    important: false,
+    render: {
+      radiusAU: 0.20 * radiusScale,
+      type: "sphere",
+      periodD: 1.888,
+      imageName: "assets/image/Tethys_map_June_2008_PIA08416_moon_only.jpg",
+      nightImageName: nullopt,
+    },
+  },
+  "Enceladus": {
+    parentName: "Saturn",
+    semiMajorAU: 0.0016,
+    semiMinorAU: 0.0015,
+    orbitRotationOffset: 0,
+    orbitStartOffset: 0.76,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 5.430e-11,
+    important: false,
+    render: {
+      radiusAU: 0.14 * radiusScale,
+      type: "sphere",
+      periodD: 1.370,
+      imageName: "assets/image/Enceladus_June_2008_PIA08417_moon_only.jpg",
+      nightImageName: nullopt,
+    },
+  },
+  "Mimas": {
+    parentName: "Saturn",
+    semiMajorAU: 0.0012,
+    semiMinorAU: 0.0011,
+    orbitRotationOffset: 0,
+    orbitStartOffset: 0.71,
+    orbitRetrograde: false,
+    childOrbitScale: 1,
+    massSols: 1.885e-11,
+    important: false,
+    render: {
+      radiusAU: 0.13 * radiusScale,
+      type: "sphere",
+      periodD: 0.942,
+      imageName: "assets/image/Mimas_(NASA)_map.jpg",
+      nightImageName: nullopt,
+    },
+  },
+  "Phoebe": {
+    parentName: "Saturn",
+    semiMajorAU: 0.0865 * 0.2, // outlier among saturn's moons
+    semiMinorAU: 0.0854 * 0.2,
+    orbitRotationOffset: 2.0,
+    orbitStartOffset: 0.1,
+    orbitRetrograde: true,
+    childOrbitScale: 1,
+    massSols: 4.17e-12,
+    important: false,
+    render: {
+      radiusAU: 0.07 * radiusScale,
+      type: "sphere",
+      periodD: 0.386,
+      imageName: "assets/image/Phoebe_2005_Mercator_PIA07795.jpg",
+      nightImageName: nullopt,
+    },
+  },
+};
 
 
 type GameProps = {
@@ -456,56 +774,60 @@ function Game({ model }: GameProps) {
     };
   }, []);
 
-  const bodies = useLazyRef(() =>
-    bodyMeta.map((meta, iBody) => ({
-      meta,
+  const bodies = useLazyRef(() => mapObject(bodyMeta, (({ key: bodyName, value: meta }) => ({
+    meta,
 
-      image: (() => {
-        const image = new Image();
-        image.src = meta.render.imageName;
-        image.onload = () => {
-          console.log(`Loaded ${meta.render.imageName}`);
-          if (bodies.current.hasValue === false) throw `image load before bodies init finishes`;
-          bodies.current = opt(bodies.current.value.withMap(iBody, b => ({
-            ...b,
+    image: (() => {
+      const image = new Image();
+      image.src = meta.render.imageName;
+      image.onload = () => {
+        console.log(`Loaded ${meta.render.imageName}`);
+        if (bodies.current.hasValue === false) throw `image load before bodies init finishes`;
+        bodies.current = opt({
+          ...bodies.current.value,
+          [bodyName]: {
+            ...bodies.current.value[bodyName],
             image: {
-              ...b.image,
+              ...bodies.current.value[bodyName].image,
               loaded: true,
             },
-          })));
-        }
-        return ({
-          image,
-          loaded: false,
+          },
         });
-      })(),
+      }
+      return ({
+        image,
+        loaded: false,
+      });
+    })(),
 
-      nightImage: (() => {
-        if (!(
-          meta.render.type === "sphere"
-          && meta.render.nightImageName.hasValue
-        )) return nullopt;
-        const src = meta.render.nightImageName.value;
-        const image = new Image();
-        image.src = src;
-        image.onload = () => {
-          console.log(`Loaded ${src}`);
-          if (bodies.current.hasValue === false) throw `image load before bodies init finishes`;
-          bodies.current = opt(bodies.current.value.withMap(iBody, b => ({
-            ...b,
+    nightImage: (() => {
+      if (!(
+        meta.render.type === "sphere"
+        && meta.render.nightImageName.hasValue
+      )) return nullopt;
+      const src = meta.render.nightImageName.value;
+      const image = new Image();
+      image.src = src;
+      image.onload = () => {
+        console.log(`Loaded ${src}`);
+        if (bodies.current.hasValue === false) throw `image load before bodies init finishes`;
+        bodies.current = opt({
+          ...bodies.current.value,
+          [bodyName]: {
+            ...bodies.current.value[bodyName],
             nightImage: opt({
               image,
               loaded: true,
             }),
-          })));
-        }
-        return opt({
-          image,
-          loaded: false,
+          },
         });
-      })(),
-    }))
-  );
+      }
+      return opt({
+        image,
+        loaded: false,
+      });
+    })(),
+  }))));
 
   function setGameState(continuation: GameStateContinuation) {
     if (drawTimesRef.current.hasValue && continuation.turnsComplete.length > 0) {
@@ -1410,7 +1732,7 @@ function Game({ model }: GameProps) {
             const sunX = width * 0.60;
             const sunY = height * 0.5;
 
-            const systemRadiusAU = 15.5;
+            const systemRadiusAU = 16.5;
             const systemRotation = 0.2;
             const scalePower = 0.63;
 
@@ -1424,62 +1746,134 @@ function Game({ model }: GameProps) {
             ctx.fillStyle = '#ffff00';
             ctx.fill();
 
-            bodies.current.value.forEach(body => {
+            let bodies_ = mapObject(bodies.current.value, ({ value: body }) => {
               const semiMajor = Math.pow(body.meta.semiMajorAU / systemRadiusAU, scalePower) * width / 2;
               const semiMinor = Math.pow(body.meta.semiMinorAU / systemRadiusAU, scalePower) * width / 2;
               const centerOffset = -Math.sqrt(semiMajor * semiMajor - semiMinor * semiMinor);
-              const eccentricity = Math.sqrt(1 - semiMinor * semiMinor / semiMajor / semiMajor);
-              let rotation = body.meta.orbitRotationOffset + systemRotation;
 
-              const orbitalPeriodD = Math.pow(body.meta.semiMajorAU, 1.5) * 365.26;
-              const orbitT = currentSimTimeD / orbitalPeriodD + body.meta.orbitStartOffset;
-              const meanAnomaly = Math.PI * 2 * orbitT;
-              // newton's method
-              const eccentricAnomaly = Array(3).fill(false).reduce((lastEstimation) =>
-                lastEstimation - (
-                  (
-                    lastEstimation
-                    - eccentricity * Math.sin(lastEstimation)
-                    - meanAnomaly
-                  ) / (
-                    1
-                    - eccentricity * Math.cos(lastEstimation)
-                  )
-                ),
-                meanAnomaly
-              );
-              let x = semiMajor * Math.cos(eccentricAnomaly);
-              let y = semiMinor * Math.sin(eccentricAnomaly);
-              let r = Math.sqrt(x * x + y * y)
-              let theta = Math.atan2(y, x);
-              theta += rotation;
-              theta += Math.PI * 10;
-              theta %= Math.PI * 2;
-              x = r * Math.cos(theta);
-              y = r * Math.sin(theta);
-              x += centerOffset * Math.cos(rotation);
-              y += centerOffset * Math.sin(rotation);
-              x += sunX
-              y += sunY
+              return {
+                ...body,
+                semiMajor,
+                semiMinor,
+                centerOffset,
+                orbitalPeriodD: 0,
+                x: 0,
+                y: 0,
+                parentX: 0,
+                parentY: 0,
+                subsystemRotation: body.meta.orbitRotationOffset,
+                parentAngle: 0,
+                finalized: false,
+              };
+            });
+
+            let allFinalized = true;
+            do {
+              allFinalized = true;
+
+              bodies_ = mapObject(bodies_, ({ value: body }) => {
+                const parentContext: Optional<{ x: number, y: number, subsystemRotation: number, childOrbitScale: number, massSols: number }> = (() => {
+                  if (body.finalized) return nullopt;
+                  if (body.meta.parentName === "Sun") {
+                    return opt({
+                      x: sunX,
+                      y: sunY,
+                      subsystemRotation: systemRotation,
+                      childOrbitScale: 1,
+                      massSols: 1,
+                    });
+                  } else if (bodies_[body.meta.parentName].finalized === false) {
+                    return nullopt;
+                  } else {
+                    return opt({ ...bodies_[body.meta.parentName], ...bodies_[body.meta.parentName].meta });
+                  }
+                })();
+
+                if (parentContext.hasValue === false) return body;
+
+                allFinalized = false;
+
+                const eccentricity = Math.sqrt(1 - body.semiMinor * body.semiMinor / body.semiMajor / body.semiMajor);
+                const orbitalPeriodD = Math.pow(body.meta.semiMajorAU * body.meta.semiMajorAU * body.meta.semiMajorAU / parentContext.value.massSols, 0.5) * 365.26;
+                const orbitT = currentSimTimeD / orbitalPeriodD + body.meta.orbitStartOffset;
+                const meanAnomaly = (Math.PI * 2 * orbitT * (body.meta.orbitRetrograde ? -1 : 1) + Math.PI * 10) % (Math.PI * 2);
+                // newton's method
+                const eccentricAnomaly = Array(3).fill(false).reduce((lastEstimation) =>
+                  lastEstimation - (
+                    (
+                      lastEstimation
+                      - eccentricity * Math.sin(lastEstimation)
+                      - meanAnomaly
+                    ) / (
+                      1
+                      - eccentricity * Math.cos(lastEstimation)
+                    )
+                  ),
+                  meanAnomaly
+                );
+
+                const subsystemRotation = body.subsystemRotation + parentContext.value.subsystemRotation;
+                const semiMajor = body.semiMajor * parentContext.value.childOrbitScale;
+                const semiMinor = body.semiMinor * parentContext.value.childOrbitScale;
+
+                let x = semiMajor * Math.cos(eccentricAnomaly);
+                let y = semiMinor * Math.sin(eccentricAnomaly);
+                let r = Math.sqrt(x * x + y * y)
+                let theta = Math.atan2(y, x);
+                theta += subsystemRotation;
+                theta += Math.PI * 10;
+                theta %= Math.PI * 2;
+                x = r * Math.cos(theta);
+                y = r * Math.sin(theta);
+                x += body.centerOffset * Math.cos(subsystemRotation);
+                y += body.centerOffset * Math.sin(subsystemRotation);
+                x += parentContext.value.x;
+                y += parentContext.value.y;
+
+                return {
+                  ...body,
+                  semiMajor,
+                  semiMinor,
+                  orbitalPeriodD,
+                  x,
+                  y,
+                  parentX: parentContext.value.x,
+                  parentY: parentContext.value.y,
+                  subsystemRotation,
+                  parentAngle: theta,
+                  finalized: true,
+                };
+              });
+            } while (!allFinalized);
+
+            mapObject(bodies_, ({ key: bodyName, value: body }) => {
+              console.log({ bodyName, body });
 
               ctx.beginPath();
               ctx.ellipse(
-                sunX + centerOffset * Math.cos(rotation),
-                sunY + centerOffset * Math.sin(rotation),
-                Math.pow(body.meta.semiMajorAU / systemRadiusAU, scalePower) * width / 2,
-                Math.pow(body.meta.semiMinorAU / systemRadiusAU, scalePower) * width / 2,
-                rotation,
+                body.parentX + body.centerOffset * Math.cos(body.subsystemRotation),
+                body.parentY + body.centerOffset * Math.sin(body.subsystemRotation),
+                body.semiMajor,
+                body.semiMinor,
+                body.subsystemRotation,
                 0,
                 Math.PI * 2);
               const orbitGradient = ctx.createConicGradient(
-                theta,
-                sunX + centerOffset * Math.cos(rotation),
-                sunY + centerOffset * Math.sin(rotation));
-              const orbitOpacity = (body.meta.important ? 0.9 : 0.2);
-              orbitGradient.addColorStop(0, `rgba(255, 255, 255, ${orbitOpacity * 0.05})`);
-              orbitGradient.addColorStop(Math.max(0, 1 - Math.pow(120 / orbitalPeriodD, 1.5)), `rgba(255, 255, 255, ${orbitOpacity * 0.12})`);
-              orbitGradient.addColorStop(1, `rgba(255, 255, 255, ${orbitOpacity})`);
-              orbitGradient.addColorStop(1, `rgba(255, 255, 255, ${orbitOpacity * 0.01})`);
+                body.parentAngle,
+                body.parentX + body.centerOffset * Math.cos(body.subsystemRotation),
+                body.parentY + body.centerOffset * Math.sin(body.subsystemRotation));
+              const orbitOpacity = (body.meta.important ? 0.9 : 0.25) * (body.meta.parentName === "Sun" ? 1 : 0.2);
+              if (body.meta.orbitRetrograde) {
+                orbitGradient.addColorStop(0, `rgba(255, 255, 255, ${orbitOpacity})`);
+                orbitGradient.addColorStop(Math.min(1, Math.pow(120 / body.orbitalPeriodD, 1.5)), `rgba(255, 255, 255, ${orbitOpacity * 0.12})`);
+                orbitGradient.addColorStop(1, `rgba(255, 255, 255, ${orbitOpacity * 0.05})`);
+                orbitGradient.addColorStop(1, `rgba(255, 255, 255, ${orbitOpacity})`);
+              } else {
+                orbitGradient.addColorStop(0, `rgba(255, 255, 255, ${orbitOpacity * 0.05})`);
+                orbitGradient.addColorStop(Math.max(0, 1 - Math.pow(120 / body.orbitalPeriodD, 1.5)), `rgba(255, 255, 255, ${orbitOpacity * 0.12})`);
+                orbitGradient.addColorStop(1, `rgba(255, 255, 255, ${orbitOpacity})`);
+                orbitGradient.addColorStop(1, `rgba(255, 255, 255, ${orbitOpacity * 0.05})`);
+              }
               ctx.strokeStyle = orbitGradient;
               ctx.stroke();
               ctx.closePath();
@@ -1488,34 +1882,38 @@ function Game({ model }: GameProps) {
               const nightImage = body.nightImage;
               if (image.loaded === false || (nightImage.hasValue && nightImage.value.loaded === false)) return;
 
-              const radius = body.meta.render.radiusAU / systemRadiusAU * width / 2;
+              const radius = body.meta.render.radiusAU / systemRadiusAU * width / 2 * (body.meta.important ? 1.0 : 0.8) * (body.meta.parentName === "Sun" ? 1.0 : 0.8);
               if (body.meta.render.type === "sphere") {
                 const width = image.image.naturalWidth * radius / image.image.naturalHeight * 2;
                 const slideX = width * ((currentSimTimeD / Math.abs(body.meta.render.periodD)) % 1.0);
                 const slideSign = body.meta.render.periodD > 0 ? -1 : 1;
                 ctx.save();
                 ctx.beginPath();
-                ctx.arc(x, y, radius * 0.95, 0, Math.PI * 2);
+                ctx.arc(body.x, body.y, radius * 0.95, 0, Math.PI * 2);
                 ctx.clip();
-                ctx.drawImage(image.image, x - radius - slideSign * slideX, y - radius, width, radius * 2);
-                ctx.drawImage(image.image, x - radius + slideSign * (width - slideX), y - radius, width, radius * 2);
+                ctx.drawImage(image.image, body.x - radius - slideSign * slideX, body.y - radius, width, radius * 2);
+                ctx.drawImage(image.image, body.x - radius + slideSign * (width - slideX), body.y - radius, width, radius * 2);
+                if (!body.meta.important) {
+                  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+                  ctx.fillRect(body.x - radius, body.y - radius, radius * 2, radius * 2);
+                }
                 ctx.restore()
 
                 ctx.save()
                 ctx.beginPath();
-                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.arc(body.x, body.y, radius, 0, Math.PI * 2);
                 ctx.clip();
 
-                const maskX = radius * (x - sunX) / Math.sign(y - sunY) / Math.max(0.01, Math.abs(y - sunY));
+                const maskX = radius * (body.x - sunX) / Math.sign(body.y - sunY) / Math.max(0.01, Math.abs(body.y - sunY));
 
                 const gradientRadius = Math.sqrt(maskX * maskX + radius * radius);
                 const gradient = ctx.createRadialGradient(
-                  x + maskX, y, 0,
-                  x + maskX, y, gradientRadius * 2
+                  body.x + maskX, body.y, 0,
+                  body.x + maskX, body.y, gradientRadius * 2
                 );
 
                 const darknessOpacity = nightImage.hasValue ? 1.0 : 0.98;
-                if (y > sunY) {
+                if (body.y > sunY) {
                   gradient.addColorStop(0, `rgba(0, 0, 0, ${darknessOpacity})`);
                   gradient.addColorStop(0.5 - 0.05 * radius / gradientRadius, `rgba(0, 0, 0, ${darknessOpacity})`);
                   gradient.addColorStop(0.5 + 0.1 * radius / gradientRadius, 'rgba(0, 0, 0, 0.0)');
@@ -1528,12 +1926,12 @@ function Game({ model }: GameProps) {
                 ctx.globalCompositeOperation = 'destination-out';
 
                 ctx.fillStyle = gradient;
-                ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+                ctx.fillRect(body.x - radius, body.y - radius, radius * 2, radius * 2);
 
                 if (nightImage.hasValue) {
                   ctx.globalCompositeOperation = 'destination-over';
-                  ctx.drawImage(nightImage.value.image, x - radius - slideSign * slideX, y - radius, width, radius * 2);
-                  ctx.drawImage(nightImage.value.image, x - radius + slideSign * (width - slideX), y - radius, width, radius * 2);
+                  ctx.drawImage(nightImage.value.image, body.x - radius - slideSign * slideX, body.y - radius, width, radius * 2);
+                  ctx.drawImage(nightImage.value.image, body.x - radius + slideSign * (width - slideX), body.y - radius, width, radius * 2);
                 }
 
                 ctx.restore();
@@ -1541,14 +1939,14 @@ function Game({ model }: GameProps) {
               else if (body.meta.render.type === "plate") {
                 const rotate = Math.PI * 2 * ((currentSimTimeD / Math.abs(body.meta.render.periodD)) % 1.0);
                 ctx.save();
-                ctx.translate(x, y);
+                ctx.translate(body.x, body.y);
                 ctx.rotate(rotate);
                 ctx.drawImage(image.image, -radius, -radius, radius * 2, radius * 2);
                 ctx.restore();
               }
               else {
                 assertType<"static">(body.meta.render.type);
-                ctx.drawImage(image.image, x - radius, y - radius, radius * 2, radius * 2);
+                ctx.drawImage(image.image, body.x - radius, body.y - radius, radius * 2, radius * 2);
               }
             });
           }, [])}

@@ -1,4 +1,34 @@
 {
+  "2k_stars.jpg": {
+    "license": "CC-BY-4.0",
+    "author": "INOVE, s.r.o - Solar System Scope, with data from NASA",
+    "source": "https://www.solarsystemscope.com/textures/",
+    "direct": "https://www.solarsystemscope.com/textures/download/2k_stars.jpg"
+  },
+  "2k_stars_milky_way.jpg": {
+    "license": "CC-BY-4.0",
+    "author": "INOVE, s.r.o - Solar System Scope, with data from NASA",
+    "source": "https://www.solarsystemscope.com/textures/",
+    "direct": "https://www.solarsystemscope.com/textures/download/2k_stars_milky_way.jpg"
+  },
+  "2k_sun.jpg": {
+    "license": "CC-BY-4.0",
+    "author": "INOVE, s.r.o - Solar System Scope, with data from NASA",
+    "source": "https://www.solarsystemscope.com/textures/",
+    "direct": "https://www.solarsystemscope.com/textures/download/2k_sun.jpg"
+  },
+  "2k_mercury.jpg": {
+    "license": "CC-BY-4.0",
+    "author": "INOVE, s.r.o - Solar System Scope, with data from NASA",
+    "source": "https://www.solarsystemscope.com/textures/",
+    "direct": "https://www.solarsystemscope.com/textures/download/2k_mercury.jpg"
+  },
+  "2k_venus_atmosphere.jpg": {
+    "license": "CC-BY-4.0",
+    "author": "INOVE, s.r.o - Solar System Scope, with data from NASA",
+    "source": "https://www.solarsystemscope.com/textures/",
+    "direct": "https://www.solarsystemscope.com/textures/download/2k_venus_atmosphere.jpg"
+  },
   "Blue_Marble_2002.png": {
     "license": "public domain",
     "source": "https://en.wikipedia.org/wiki/File:Blue_Marble_2002.png"
@@ -9,27 +39,36 @@
     "direct": "https://assets.science.nasa.gov/content/dam/science/esd/eo/images/imagerecords/144000/144897/BlackMarble_2016_01deg_gray.jpg",
     "modified": "contrast increased by Charlie Morley 20261029; same license"
   },
-  "Solarsystemscope_texture_8k_mars.jpg": {
+  "2k_mars.jpg": {
     "license": "CC-BY-4.0",
-    "author": "https://commons.wikimedia.org/wiki/User:Cmglee",
-    "source": "https://commons.wikimedia.org/wiki/File:Solarsystemscope_texture_8k_mars.jpg"
+    "author": "INOVE, s.r.o - Solar System Scope, with data from NASA",
+    "source": "https://www.solarsystemscope.com/textures/",
+    "direct": "https://www.solarsystemscope.com/textures/download/2k_mars.jpg"
   },
-  "Cylindrical_Map_of_Venus.jpg": {
+  "Phobos_Viking_Mosaic_DLRcontrol_7200.jpg": {
     "license": "public domain",
-    "source": "https://commons.wikimedia.org/wiki/File:Cylindrical_Map_of_Venus.jpg"
+    "author": "Planetary Data System / Phil Stooke",
+    "source": "https://commons.wikimedia.org/wiki/File:Phobos_Viking_Mosaic_DLRcontrol_7200.jpg  --  https://astrogeology.usgs.gov/search/map/Phobos/Viking/Phobos_Viking_Mosaic_40ppd_DLRcontrol"
   },
-  "Mercury_-_complete_mono_basemap_2500mpp_equirectangular.png": {
-    "license": "public domain",
-    "source": "https://commons.wikimedia.org/wiki/File:Mercury_-_complete_mono_basemap_2500mpp_equirectangular.png"
+  "deimos_texture_map_upd_2024__by_oleg_pluton_dcrr1qe-pre.jpg": {
+    "license": "CC-BY-SA-3.0",
+    "author": "Oleg-Pluton https://www.deviantart.com/oleg-pluton/gallery",
+    "source": "https://www.deviantart.com/oleg-pluton/art/Deimos-texture-map-(Upd-2024)-772205702"
   },
-  "Solarsystemscope_texture_4k_ceres_fictional.jpg": {
+  "2k_ceres_fictional.jpg": {
     "license": "CC-BY-4.0",
-    "author": "https://commons.wikimedia.org/wiki/User:Cmglee",
-    "source": "https://commons.wikimedia.org/wiki/File:Solarsystemscope_texture_4k_ceres_fictional.jpg"
+    "author": "INOVE, s.r.o - Solar System Scope, with data from NASA",
+    "source": "https://www.solarsystemscope.com/textures/",
+    "direct": "https://www.solarsystemscope.com/textures/download/2k_ceres_fictional.jpg"
   },
   "Vesta_map_for_GeoHack.png": {
     "license": "public domain",
     "source": "https://commons.wikimedia.org/wiki/File:Vesta_map_for_GeoHack.png"
+  },
+  "tycho.png": {
+    "license": "public domain",
+    "author": "Charlie Morley 20261023",
+    "source": "this project"
   },
   "20150529_eros_map.jpg": {
     "license": "CC-BY-3.0",
@@ -38,24 +77,179 @@
     "direct": "https://planetary.s3.amazonaws.com/web/assets/pictures/_1200x600_crop_center-center_82_line/80068/20150529_eros_map.jpg.webp",
     "modified": "labels blurred out by Charlie Morley 20261023; same license"
   },
-  "Solarsystemscope_texture_2k_jupiter.jpg": {
-    "license": "CC-BY-4.0",
-    "author": "https://commons.wikimedia.org/wiki/User:Cmglee",
-    "source": "https://commons.wikimedia.org/wiki/File:Solarsystemscope_texture_2k_jupiter.jpg"
-  },
-  "Solarsystemscope_texture_2k_saturn.jpg": {
-    "license": "CC-BY-4.0",
-    "author": "https://commons.wikimedia.org/wiki/User:Cmglee",
-    "source": "https://commons.wikimedia.org/wiki/File:Solarsystemscope_texture_2k_saturn.jpg"
-  },
-  "tycho.png": {
-    "license": "public domain",
-    "author": "Charlie Morley 20261023",
-    "source": "this project"
-  },
   "thoth.png": {
     "license": "public domain",
     "author": "Charlie Morley 20261023",
     "source": "this project"
+  },
+  "2k_jupiter.jpg": {
+    "license": "CC-BY-4.0",
+    "author": "INOVE, s.r.o - Solar System Scope, with data from NASA",
+    "source": "https://www.solarsystemscope.com/textures/",
+    "direct": "https://www.solarsystemscope.com/textures/download/2k_jupiter.jpg"
+  },
+  "https://bjj.mmedia.is/data/europa/europa_m.jpg": {
+    "licenses": [
+      {
+        "page": "https://bjj.mmedia.is/acknow.html",
+        "text": "Use of the planetary maps: The planetary maps on these pages are publicly available. You do not need a special permission to use them but if you do then please mention their origin in your work, e.g. \"created by Björn Jónsson\" or something equivalent. Also I would like to see renderings/animations created using them if possible, I'm interested in space art."
+      },
+      {
+        "page": "https://bjj.mmedia.is/planetary_maps.html",
+        "text": "You are also welcome to link to the maps from your own website. However, please do not place a copy of the maps on your website. One reason for this is that from time to time I \"upgrade\" the maps with improved versions and I don't want to have old, obsolete versions of my maps scattered around on the web."
+      }
+    ],
+    "author": "created by Björn Jónsson https://bjj.mmedia.is/",
+    "source": "https://bjj.mmedia.is/data/europa/europa.html",
+    "direct": "https://bjj.mmedia.is/data/europa/europa_m.jpg",
+    "comment": "This image is linked directly in the application - rather than copied to assets folder - per request by the license."
+  },
+  "https://bjj.mmedia.is/data/ganymede/ganymede_m.jpg": {
+    "licenses": [
+      {
+        "page": "https://bjj.mmedia.is/acknow.html",
+        "text": "Use of the planetary maps: The planetary maps on these pages are publicly available. You do not need a special permission to use them but if you do then please mention their origin in your work, e.g. \"created by Björn Jónsson\" or something equivalent. Also I would like to see renderings/animations created using them if possible, I'm interested in space art."
+      },
+      {
+        "page": "https://bjj.mmedia.is/planetary_maps.html",
+        "text": "You are also welcome to link to the maps from your own website. However, please do not place a copy of the maps on your website. One reason for this is that from time to time I \"upgrade\" the maps with improved versions and I don't want to have old, obsolete versions of my maps scattered around on the web."
+      }
+    ],
+    "author": "created by Björn Jónsson https://bjj.mmedia.is/",
+    "source": "https://bjj.mmedia.is/data/ganymede/index.html",
+    "direct": "https://bjj.mmedia.is/data/ganymede/ganymede_m.jpg",
+    "comment": "This image is linked directly in the application - rather than copied to assets folder - per request by the license."
+  },
+  "https://bjj.mmedia.is/data/io/io_m.jpg": {
+    "licenses": [
+      {
+        "page": "https://bjj.mmedia.is/acknow.html",
+        "text": "Use of the planetary maps: The planetary maps on these pages are publicly available. You do not need a special permission to use them but if you do then please mention their origin in your work, e.g. \"created by Björn Jónsson\" or something equivalent. Also I would like to see renderings/animations created using them if possible, I'm interested in space art."
+      },
+      {
+        "page": "https://bjj.mmedia.is/planetary_maps.html",
+        "text": "You are also welcome to link to the maps from your own website. However, please do not place a copy of the maps on your website. One reason for this is that from time to time I \"upgrade\" the maps with improved versions and I don't want to have old, obsolete versions of my maps scattered around on the web."
+      }
+    ],
+    "author": "created by Björn Jónsson https://bjj.mmedia.is/",
+    "source": "https://bjj.mmedia.is/data/io/io.html",
+    "direct": "https://bjj.mmedia.is/data/io/io_m.jpg",
+    "comment": "This image is linked directly in the application - rather than copied to assets folder - per request by the license."
+  },
+  "https://bjj.mmedia.is/data/callisto/callisto_m.jpg": {
+    "licenses": [
+      {
+        "page": "https://bjj.mmedia.is/acknow.html",
+        "text": "Use of the planetary maps: The planetary maps on these pages are publicly available. You do not need a special permission to use them but if you do then please mention their origin in your work, e.g. \"created by Björn Jónsson\" or something equivalent. Also I would like to see renderings/animations created using them if possible, I'm interested in space art."
+      },
+      {
+        "page": "https://bjj.mmedia.is/planetary_maps.html",
+        "text": "You are also welcome to link to the maps from your own website. However, please do not place a copy of the maps on your website. One reason for this is that from time to time I \"upgrade\" the maps with improved versions and I don't want to have old, obsolete versions of my maps scattered around on the web."
+      }
+    ],
+    "author": "created by Björn Jónsson https://bjj.mmedia.is/",
+    "source": "https://bjj.mmedia.is/data/callisto/index.html",
+    "direct": "https://bjj.mmedia.is/data/callisto/callisto_m.jpg",
+    "comment": "This image is linked directly in the application - rather than copied to assets folder - per request by the license."
+  },
+  "2k_saturn.jpg": {
+    "license": "CC-BY-4.0",
+    "author": "INOVE, s.r.o - Solar System Scope, with data from NASA",
+    "source": "https://www.solarsystemscope.com/textures/",
+    "direct": "https://www.solarsystemscope.com/textures/download/2k_saturn.jpg"
+  },
+  "2k_saturn_ring_alpha.png": {
+    "license": "CC-BY-4.0",
+    "author": "INOVE, s.r.o - Solar System Scope, with data from NASA",
+    "source": "https://www.solarsystemscope.com/textures/",
+    "direct": "https://www.solarsystemscope.com/textures/download/2k_saturn_ring_alpha.png"
+  },
+  "https://bjj.mmedia.is/data/rhea/rhea_a_m.jpg": {
+    "licenses": [
+      {
+        "page": "https://bjj.mmedia.is/acknow.html",
+        "text": "Use of the planetary maps: The planetary maps on these pages are publicly available. You do not need a special permission to use them but if you do then please mention their origin in your work, e.g. \"created by Björn Jónsson\" or something equivalent. Also I would like to see renderings/animations created using them if possible, I'm interested in space art."
+      },
+      {
+        "page": "https://bjj.mmedia.is/planetary_maps.html",
+        "text": "You are also welcome to link to the maps from your own website. However, please do not place a copy of the maps on your website. One reason for this is that from time to time I \"upgrade\" the maps with improved versions and I don't want to have old, obsolete versions of my maps scattered around on the web."
+      }
+    ],
+    "author": "created by Björn Jónsson https://bjj.mmedia.is/",
+    "source": "https://bjj.mmedia.is/data/rhea/index.html",
+    "direct": "https://bjj.mmedia.is/data/rhea/rhea_a_m.jpg",
+    "comment": "This image is linked directly in the application - rather than copied to assets folder - per request by the license."
+  },
+  "sat6fss1.jpg": {
+    "licenses": [
+      {
+        "page": "https://maps.jpl.nasa.gov/faq.html",
+        "text": "Refer to the JPL/Caltech image usage policy link found at the bottom of this page."
+      },
+      {
+        "page": "https://www.jpl.nasa.gov/nmp/eo3/copyright.php",
+        "text": "JPL images are available for use by the public free of charge...",
+        "comment": "Text was truncated here; see full text on page, including commercial-use requirements. For purposes of this project (e.g. non-commercial), essentially public domain."
+      }
+    ],
+    "source": "https://maps.jpl.nasa.gov/tmaps/saturn.html",
+    "direct": "https://maps.jpl.nasa.gov/tmaps/pix/sat6fss1.jpg"
+  },
+  "Iapetus_May_2008_PIA11116_moon_only.jpg": {
+    "license": "public domain",
+    "authors": [
+      "NASA/JPL/Space Science Institute",
+      "derivative work: https://commons.wikimedia.org/wiki/User:Ysogo"
+    ],
+    "source": "https://commons.wikimedia.org/wiki/File:Iapetus_May_2008_PIA11116_moon_only.jpg",
+    "comment": "Ysogo modifications: Compared to the previous version, the picture has been limited to the surface of the moon Iapetus."
+  },
+  "PIA12577_fig1.jpg": {
+    "license": "public domain",
+    "author": "NASA/JPL/Space Science Institute",
+    "source": "https://science.nasa.gov/photojournal/map-of-dione-february-2010/",
+    "direct": "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/photojournal/pia/pia12/pia12577/figures/PIA12577_fig1.jpg",
+    "comment": "cropped out rulers by Charlie Morley 20261030"
+  },
+  "Tethys_map_June_2008_PIA08416_moon_only.jpg": {
+    "license": "public domain",
+    "authors": [
+      "NASA/JPL/Space Science Institute",
+      "derivative work: https://commons.wikimedia.org/wiki/User:Ysogo"
+    ],
+    "source": "https://commons.wikimedia.org/wiki/File:Tethys_map_June_2008_PIA08416_moon_only.jpg",
+    "comment": "Ysogo modifications: Compared to the previous version, the picture has been limited to the surface of the moon Tethys."
+  },
+  "Enceladus_June_2008_PIA08417_moon_only.jpg": {
+    "license": "public domain",
+    "authors": [
+      "NASA/JPL/Space Science Institute",
+      "derivative work: https://commons.wikimedia.org/wiki/User:Ysogo"
+    ],
+    "source": "https://commons.wikimedia.org/wiki/File:Enceladus_June_2008_PIA08417_moon_only.jpg",
+    "comment": "Ysogo modifications: Compared to the previous version, the picture has been limited to the surface of the moon Enceladus."
+  },
+  "Mimas_(NASA)_map.jpg": {
+    "license": "public domain",
+    "author": "NASA/JPL-Caltech/Space Science Institute",
+    "source": "https://commons.wikimedia.org/wiki/File:Mimas_(NASA)_map.jpg"
+  },
+  "Phoebe_2005_Mercator_PIA07795.jpg": {
+    "license": "public domain",
+    "author": "NASA/JPL/Space Science Institute",
+    "source": "https://en.wikipedia.org/wiki/File:Phoebe_2005_Mercator_PIA07795.jpg",
+    "comment": "cropped out rulers and blurred labels by Charlie Morley 20261030"
+  },
+  "2k_uranus.jpg": {
+    "license": "CC-BY-4.0",
+    "author": "INOVE, s.r.o - Solar System Scope, with data from NASA",
+    "source": "https://www.solarsystemscope.com/textures/",
+    "direct": "https://www.solarsystemscope.com/textures/download/2k_uranus.jpg"
+  },
+  "2k_neptune.jpg": {
+    "license": "CC-BY-4.0",
+    "author": "INOVE, s.r.o - Solar System Scope, with data from NASA",
+    "source": "https://www.solarsystemscope.com/textures/",
+    "direct": "https://www.solarsystemscope.com/textures/download/2k_neptune.jpg"
   }
 }

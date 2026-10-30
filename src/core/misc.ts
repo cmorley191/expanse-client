@@ -30,6 +30,19 @@ export function asType<T>(): <U extends T>(x: U) => T {
 export type ElementTypeOf<TArray> = TArray extends (infer TElement)[] ? TElement : never;
 export type Element2TypeOf<TArray> = TArray extends (infer TElement)[][] ? TElement : never;
 
+export function mapObject<TObject, TNewValue>(
+  x: TObject,
+  transform: (pair: { key: keyof TObject, value: TObject[keyof TObject] }) => TNewValue
+): { [K in keyof TObject]: TNewValue } {
+  const result = {} as { [K in keyof TObject]: TNewValue };
+
+  for (const key in x) {
+    result[key] = transform({ key, value: x[key] });
+  }
+
+  return result;
+}
+
 /**
  * Returns a copy of the given object with the specified keys removed (if they are present).
  * 
