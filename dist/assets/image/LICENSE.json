@@ -164,6 +164,10 @@
     "source": "https://www.solarsystemscope.com/textures/",
     "direct": "https://www.solarsystemscope.com/textures/download/2k_saturn_ring_alpha.png"
   },
+  "saturn_with_rings.png": {
+    "license": "most restrictive license of 2k_saturn.jpg and 2k_saturn_ring_alpha.png",
+    "comment": "this is a combination of 2k_saturn.jpg and 2k_saturn_ring_alpha.png; combined & edited by Charlie Morley 20261101"
+  },
   "https://bjj.mmedia.is/data/rhea/rhea_a_m.jpg": {
     "licenses": [
       {

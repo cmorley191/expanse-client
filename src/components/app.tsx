@@ -108,6 +108,7 @@ export function Canvas({ draw, ...rest }: CanvasProps) {
 };
 
 const radiusScale = 0.62;
+const saturnTooBigPadding = 0.002;
 type BodyName =
   | "Sun"
   | "Mercury" | "Venus" | "Earth" | "Mars" | "Jupiter" | "Saturn"
@@ -352,7 +353,7 @@ const bodyMeta: {
     render: {
       radiusAU: 0.09 * radiusScale,
       type: "plate",
-      periodD: 0.02,
+      periodD: 0.04,
       imageName: "assets/image/thoth.png",
     },
   },
@@ -453,21 +454,19 @@ const bodyMeta: {
     orbitRotationOffset: 1.615,
     orbitStartOffset: 0.735,
     orbitRetrograde: false,
-    childOrbitScale: 11,
+    childOrbitScale: 5 * 2688 / 1024,
     massSols: 2.857e-4,
     important: true,
     render: {
-      radiusAU: 0.57 * radiusScale,
-      type: "sphere",
-      periodD: 0.444,
-      imageName: "assets/image/2k_saturn.jpg",
-      nightImageName: nullopt,
+      radiusAU: 0.57 * radiusScale * 2688 / 1024,
+      type: "static",
+      imageName: "assets/image/saturn_with_rings.png",
     },
   },
   "Rhea": {
     parentName: "Saturn",
-    semiMajorAU: 0.0035,
-    semiMinorAU: 0.0034,
+    semiMajorAU: 0.0035 + saturnTooBigPadding,
+    semiMinorAU: 0.0034 + saturnTooBigPadding,
     orbitRotationOffset: 0,
     orbitStartOffset: 0.94,
     orbitRetrograde: false,
@@ -484,8 +483,8 @@ const bodyMeta: {
   },
   "Titan": {
     parentName: "Saturn",
-    semiMajorAU: 0.0082,
-    semiMinorAU: 0.0081,
+    semiMajorAU: 0.0082 + saturnTooBigPadding,
+    semiMinorAU: 0.0081 + saturnTooBigPadding,
     orbitRotationOffset: 0,
     orbitStartOffset: 0.25,
     orbitRetrograde: false,
@@ -502,8 +501,8 @@ const bodyMeta: {
   },
   "Iapetus": {
     parentName: "Saturn",
-    semiMajorAU: 0.0238 * 0.5, // outlier among saturn's moons
-    semiMinorAU: 0.0237 * 0.5,
+    semiMajorAU: 0.0238 * 0.5 + saturnTooBigPadding, // outlier among saturn's moons
+    semiMinorAU: 0.0237 * 0.5 + saturnTooBigPadding,
     orbitRotationOffset: 0,
     orbitStartOffset: 0.8,
     orbitRetrograde: false,
@@ -520,8 +519,8 @@ const bodyMeta: {
   },
   "Dione": {
     parentName: "Saturn",
-    semiMajorAU: 0.0025,
-    semiMinorAU: 0.0024,
+    semiMajorAU: 0.0025 + saturnTooBigPadding,
+    semiMinorAU: 0.0024 + saturnTooBigPadding,
     orbitRotationOffset: 0,
     orbitStartOffset: 0.86,
     orbitRetrograde: false,
@@ -538,8 +537,8 @@ const bodyMeta: {
   },
   "Tethys": {
     parentName: "Saturn",
-    semiMajorAU: 0.0020,
-    semiMinorAU: 0.0019,
+    semiMajorAU: 0.0020 + saturnTooBigPadding,
+    semiMinorAU: 0.0019 + saturnTooBigPadding,
     orbitRotationOffset: 0,
     orbitStartOffset: 0.09,
     orbitRetrograde: false,
@@ -556,8 +555,8 @@ const bodyMeta: {
   },
   "Enceladus": {
     parentName: "Saturn",
-    semiMajorAU: 0.0016,
-    semiMinorAU: 0.0015,
+    semiMajorAU: 0.0016 + saturnTooBigPadding,
+    semiMinorAU: 0.0015 + saturnTooBigPadding,
     orbitRotationOffset: 0,
     orbitStartOffset: 0.76,
     orbitRetrograde: false,
@@ -574,8 +573,8 @@ const bodyMeta: {
   },
   "Mimas": {
     parentName: "Saturn",
-    semiMajorAU: 0.0012,
-    semiMinorAU: 0.0011,
+    semiMajorAU: 0.0012 + saturnTooBigPadding,
+    semiMinorAU: 0.0011 + saturnTooBigPadding,
     orbitRotationOffset: 0,
     orbitStartOffset: 0.71,
     orbitRetrograde: false,
@@ -592,8 +591,8 @@ const bodyMeta: {
   },
   "Phoebe": {
     parentName: "Saturn",
-    semiMajorAU: 0.0865 * 0.2, // outlier among saturn's moons
-    semiMinorAU: 0.0854 * 0.2,
+    semiMajorAU: 0.0865 * 0.2 + saturnTooBigPadding, // outlier among saturn's moons
+    semiMinorAU: 0.0854 * 0.2 + saturnTooBigPadding,
     orbitRotationOffset: 2.0,
     orbitStartOffset: 0.1,
     orbitRetrograde: true,
@@ -1729,7 +1728,7 @@ function Game({ model }: GameProps) {
 
             const width = ctx.canvas.clientWidth;
             const height = ctx.canvas.clientHeight;
-            const sunX = width * 0.60;
+            const sunX = width * 0.58;
             const sunY = height * 0.5;
 
             const systemRadiusAU = 16.5;
