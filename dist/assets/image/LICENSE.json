@@ -45,6 +45,11 @@
     "source": "https://www.solarsystemscope.com/textures/",
     "direct": "https://www.solarsystemscope.com/textures/download/2k_mars.jpg"
   },
+  "mars_night.jpg": {
+    "license": "public domain",
+    "author": "Charlie Morley 20261101",
+    "source": "this project"
+  },
   "Phobos_Viking_Mosaic_DLRcontrol_7200.jpg": {
     "license": "public domain",
     "author": "Planetary Data System / Phil Stooke",

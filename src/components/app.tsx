@@ -231,7 +231,7 @@ const bodyMeta: {
       type: "sphere",
       periodD: 1.026,
       imageName: "assets/image/2k_mars.jpg",
-      nightImageName: nullopt,
+      nightImageName: opt("assets/image/mars_night.jpg"),
     },
   },
   "Phobos": {
